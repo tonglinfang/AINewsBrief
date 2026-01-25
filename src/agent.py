@@ -1,10 +1,21 @@
 """Main agent entry point for running the AI News Brief workflow."""
 
 import asyncio
+import sys
 from datetime import datetime
 from src.graph.state import BriefState
 from src.graph.workflow import create_brief_workflow
 from src.config import settings
+from src.utils.logger import init_logger, get_logger
+
+
+def setup_logging():
+    """Initialize logging based on configuration."""
+    json_format = settings.log_format.lower() == "json"
+    return init_logger(
+        level=settings.log_level,
+        json_format=json_format,
+    )
 
 
 async def run_daily_brief() -> BriefState:
@@ -13,9 +24,16 @@ async def run_daily_brief() -> BriefState:
     Returns:
         Final workflow state
     """
-    print("🚀 Starting AI News Brief workflow...")
-    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("-" * 60)
+    # Initialize logging
+    setup_logging()
+    logger = get_logger("agent")
+
+    logger.info(
+        "workflow_start",
+        timestamp=datetime.now().isoformat(),
+        max_articles=settings.max_total_articles,
+        llm_provider=settings.llm_provider,
+    )
 
     # Create workflow
     workflow = create_brief_workflow()
@@ -37,32 +55,35 @@ async def run_daily_brief() -> BriefState:
     try:
         final_state = await workflow.ainvoke(initial_state)
 
-        print("-" * 60)
-        print("✅ Workflow completed successfully!")
-        print(f"📊 Total articles processed: {len(final_state['analyzed_articles'])}")
-
-        if final_state.get("report_path"):
-            print(f"💾 Report saved: {final_state['report_path']}")
-
-        if final_state.get("telegram_message_id"):
-            print(f"📱 Telegram message ID: {final_state['telegram_message_id']}")
+        logger.info(
+            "workflow_complete",
+            articles_processed=len(final_state["analyzed_articles"]),
+            report_path=final_state.get("report_path"),
+            telegram_sent=final_state.get("telegram_message_id") is not None,
+            error_count=len(final_state.get("errors", [])),
+        )
 
         if final_state.get("errors"):
-            print(f"⚠️ Errors: {len(final_state['errors'])}")
             for error in final_state["errors"]:
-                print(f"   - {error}")
+                logger.warning("workflow_error", error=error)
 
         return final_state
 
     except Exception as e:
-        print("-" * 60)
-        print(f"❌ Workflow failed: {e}")
+        logger.error("workflow_failed", error=str(e), exc_info=True)
         raise
 
 
 def main():
     """CLI entry point."""
-    asyncio.run(run_daily_brief())
+    try:
+        asyncio.run(run_daily_brief())
+    except KeyboardInterrupt:
+        print("\nInterrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

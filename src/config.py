@@ -29,8 +29,15 @@ class Settings(BaseSettings):
     reddit_client_id: str = Field(default="", description="Reddit client ID")
     reddit_client_secret: str = Field(default="", description="Reddit client secret")
     reddit_user_agent: str = Field(
-        default="AINewsBrief/0.1.0", description="Reddit user agent"
+        default="AINewsBrief/1.0.0", description="Reddit user agent"
     )
+
+    # GitHub API (optional, for higher rate limits)
+    github_token: str = Field(default="", description="GitHub personal access token")
+
+    # Logging Configuration
+    log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
+    log_format: str = Field(default="console", description="Log format (console, json)")
 
     # Article filtering
     max_total_articles: int = Field(

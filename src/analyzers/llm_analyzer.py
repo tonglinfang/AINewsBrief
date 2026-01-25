@@ -8,6 +8,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from src.models.article import Article
 from src.models.analysis import AnalysisResult, CategoryType
 from src.config import settings
+from src.utils.logger import get_logger
+
+logger = get_logger("llm_analyzer")
 
 
 def create_llm() -> BaseChatModel:
@@ -111,8 +114,11 @@ class LLMAnalyzer:
     def __init__(self):
         """Initialize LLM analyzer with configured provider."""
         self.llm = create_llm()
-        print(f"📊 LLM Provider: {settings.llm_provider}")
-        print(f"📊 LLM Model: {settings.llm_model}")
+        logger.info(
+            "llm_initialized",
+            provider=settings.llm_provider,
+            model=settings.llm_model,
+        )
 
     async def analyze_batch(self, articles: List[Article]) -> List[AnalysisResult]:
         """Analyze multiple articles concurrently.
@@ -137,7 +143,7 @@ class LLMAnalyzer:
                 if isinstance(result, AnalysisResult):
                     results.append(result)
                 elif isinstance(result, Exception):
-                    print(f"Error analyzing article: {result}")
+                    logger.warning("article_analysis_error", error=str(result))
 
             # Small delay between batches
             if i + batch_size < len(articles):
@@ -183,7 +189,11 @@ class LLMAnalyzer:
             )
 
         except Exception as e:
-            print(f"Error analyzing article '{article.title}': {e}")
+            logger.warning(
+                "article_analysis_failed",
+                title=article.title[:50],
+                error=str(e),
+            )
             # Return default analysis on error
             return AnalysisResult(
                 article=article,
@@ -232,6 +242,9 @@ class LLMAnalyzer:
             return data
 
         except Exception as e:
-            print(f"Error parsing LLM response: {e}")
-            print(f"Response text: {response_text}")
+            logger.error(
+                "llm_response_parse_error",
+                error=str(e),
+                response_preview=response_text[:200],
+            )
             raise

@@ -3,9 +3,14 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List
+import aiohttp
 import feedparser
 from src.models.article import Article
 from src.config import settings
+from src.utils.logger import get_logger
+from src.utils.retry import async_retry
+
+logger = get_logger("rss_fetcher")
 
 
 class RSSFetcher:
@@ -17,12 +22,17 @@ class RSSFetcher:
         "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
         "The Verge AI": "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
         "AI News": "https://artificialintelligence-news.com/feed/",
+        # Additional high-quality sources
+        "Ars Technica AI": "https://feeds.arstechnica.com/arstechnica/technology-lab",
+        "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
+        "The Information AI": "https://www.theinformation.com/feed",
     }
 
     def __init__(self):
         """Initialize RSS fetcher."""
         self.max_age = timedelta(hours=settings.article_age_hours)
         self.max_per_source = settings.max_articles_per_source
+        self.timeout = aiohttp.ClientTimeout(total=30)
 
     async def fetch_all(self) -> List[Article]:
         """Fetch articles from all RSS sources concurrently.
@@ -30,18 +40,22 @@ class RSSFetcher:
         Returns:
             List of Article objects
         """
+        logger.info("fetching_rss_feeds", sources=len(self.RSS_FEEDS))
         tasks = [self.fetch_feed(name, url) for name, url in self.RSS_FEEDS.items()]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
-        for result in results:
+        for name, result in zip(self.RSS_FEEDS.keys(), results):
             if isinstance(result, list):
                 articles.extend(result)
+                logger.info("rss_fetched", source=name, count=len(result))
             elif isinstance(result, Exception):
-                print(f"Error fetching RSS feed: {result}")
+                logger.warning("rss_fetch_error", source=name, error=str(result))
 
+        logger.info("rss_total", count=len(articles))
         return articles
 
+    @async_retry(max_attempts=3, min_wait=1.0, max_wait=10.0)
     async def fetch_feed(self, source_name: str, feed_url: str) -> List[Article]:
         """Fetch articles from a single RSS feed.
 
@@ -53,9 +67,20 @@ class RSSFetcher:
             List of Article objects
         """
         try:
-            # Run feedparser in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            feed = await loop.run_in_executor(None, feedparser.parse, feed_url)
+            # Fetch with aiohttp for better timeout control
+            async with aiohttp.ClientSession(timeout=self.timeout) as session:
+                async with session.get(feed_url) as response:
+                    if response.status != 200:
+                        logger.warning(
+                            "rss_http_error",
+                            source=source_name,
+                            status=response.status,
+                        )
+                        return []
+                    content = await response.text()
+
+            # Parse feed
+            feed = feedparser.parse(content)
 
             articles = []
             cutoff_time = datetime.now(timezone.utc) - self.max_age
@@ -68,8 +93,8 @@ class RSSFetcher:
                         continue
 
                     # Extract content
-                    content = self._extract_content(entry)
-                    if not content or len(content) < 100:
+                    entry_content = self._extract_content(entry)
+                    if not entry_content or len(entry_content) < 100:
                         continue
 
                     article = Article(
@@ -77,19 +102,23 @@ class RSSFetcher:
                         url=entry.get("link", ""),
                         source=source_name,
                         published_at=published_at,
-                        content=content,
+                        content=entry_content,
                         tags=self._extract_tags(entry),
                     )
                     articles.append(article)
 
                 except Exception as e:
-                    print(f"Error parsing entry from {source_name}: {e}")
+                    logger.debug(
+                        "rss_entry_error",
+                        source=source_name,
+                        error=str(e),
+                    )
                     continue
 
             return articles
 
         except Exception as e:
-            print(f"Error fetching feed {source_name}: {e}")
+            logger.warning("rss_feed_error", source=source_name, error=str(e))
             return []
 
     def _parse_date(self, entry: dict) -> datetime:

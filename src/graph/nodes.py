@@ -2,12 +2,16 @@
 
 import asyncio
 from typing import List
+from datetime import datetime, timedelta, timezone
+
 from src.graph.state import BriefState
 from src.models.article import Article
 from src.models.analysis import AnalysisResult
 from src.tools.rss_fetcher import RSSFetcher
 from src.tools.api_fetcher import RedditFetcher, HackerNewsFetcher
 from src.tools.arxiv_fetcher import ArxivFetcher
+from src.tools.blog_fetcher import BlogFetcher
+from src.tools.github_fetcher import GitHubFetcher
 from src.tools.telegram_sender import TelegramSender
 from src.analyzers.llm_analyzer import LLMAnalyzer
 from src.formatters.markdown_formatter import MarkdownFormatter
@@ -18,8 +22,10 @@ from src.utils.dedup_history import (
     record_seen_articles,
 )
 from src.utils.report_saver import save_report
+from src.utils.logger import get_logger
 from src.config import settings
-from datetime import datetime, timedelta, timezone
+
+logger = get_logger("workflow")
 
 
 async def fetch_news_node(state: BriefState) -> BriefState:
@@ -31,33 +37,43 @@ async def fetch_news_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with raw_articles populated
     """
-    print("📡 Fetching news from all sources...")
+    logger.info("fetch_node_start")
 
-    # Initialize fetchers
+    # Initialize all fetchers (including new ones)
     fetchers = [
-        RSSFetcher().fetch_all(),
-        RedditFetcher().fetch_all(),
-        HackerNewsFetcher().fetch_all(),
-        ArxivFetcher().fetch_all(),
+        ("RSS Feeds", RSSFetcher().fetch_all()),
+        ("Reddit", RedditFetcher().fetch_all()),
+        ("HackerNews", HackerNewsFetcher().fetch_all()),
+        ("ArXiv", ArxivFetcher().fetch_all()),
+        ("Official Blogs", BlogFetcher().fetch_all()),
+        ("GitHub Releases", GitHubFetcher().fetch_all()),
     ]
 
     # Fetch concurrently
-    results = await asyncio.gather(*fetchers, return_exceptions=True)
+    tasks = [fetcher[1] for fetcher in fetchers]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Collect articles
     raw_articles: List[Article] = []
     errors: List[str] = list(state.get("errors", []))
+    source_stats = {}
 
-    for i, result in enumerate(results):
+    for (source_name, _), result in zip(fetchers, results):
         if isinstance(result, list):
             raw_articles.extend(result)
-            print(f"  ✓ Source {i+1}: {len(result)} articles")
+            source_stats[source_name] = len(result)
+            logger.info("source_fetched", source=source_name, count=len(result))
         elif isinstance(result, Exception):
-            error_msg = f"Error fetching from source {i+1}: {result}"
-            print(f"  ✗ {error_msg}")
+            error_msg = f"Error fetching from {source_name}: {result}"
+            logger.error("source_error", source=source_name, error=str(result))
             errors.append(error_msg)
+            source_stats[source_name] = 0
 
-    print(f"📊 Total fetched: {len(raw_articles)} articles")
+    logger.info(
+        "fetch_node_complete",
+        total_articles=len(raw_articles),
+        source_stats=source_stats,
+    )
 
     return {
         **state,
@@ -75,7 +91,7 @@ async def filter_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with filtered_articles populated
     """
-    print("🔍 Filtering and deduplicating articles...")
+    logger.info("filter_node_start", raw_count=len(state["raw_articles"]))
 
     raw_articles = state["raw_articles"]
     max_articles = state["max_articles"]
@@ -88,13 +104,13 @@ async def filter_node(state: BriefState) -> BriefState:
     # Filter by age (already done in fetchers, but double-check)
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=settings.article_age_hours)
     time_filtered = [a for a in raw_articles if _coerce_utc(a.published_at) >= cutoff_time]
-    print(f"  ✓ After time filter: {len(time_filtered)} articles")
+    logger.debug("time_filtered", count=len(time_filtered))
 
     # Filter by content length
     content_filtered = [a for a in time_filtered if len(a.content) >= 100]
-    print(f"  ✓ After content filter: {len(content_filtered)} articles")
+    logger.debug("content_filtered", count=len(content_filtered))
 
-    # Deduplicate
+    # Deduplicate against history
     seen_urls, seen_titles = load_dedup_history(
         settings.dedup_history_path, settings.dedup_history_days
     )
@@ -104,14 +120,38 @@ async def filter_node(state: BriefState) -> BriefState:
         seen_titles,
         title_similarity_threshold=0.8,
     )
-    print(f"  ✓ After history filter: {len(history_filtered)} articles")
+    logger.debug("history_filtered", count=len(history_filtered))
 
+    # Deduplicate within current batch
     deduplicated = deduplicate_articles(history_filtered)
-    print(f"  ✓ After deduplication: {len(deduplicated)} articles")
+    logger.debug("deduplicated", count=len(deduplicated))
+
+    # Sort by source priority (official blogs first, then HN/Reddit by engagement)
+    def priority_sort(article: Article) -> tuple:
+        source_priority = {
+            "OpenAI Blog": 100,
+            "Anthropic Blog": 100,
+            "Google AI Blog": 95,
+            "DeepMind Blog": 95,
+            "GitHub": 80,
+            "HackerNews": 70,
+            "ArXiv": 60,
+        }
+        for source_key, priority in source_priority.items():
+            if source_key in article.source:
+                return (-priority, article.published_at)
+        return (-50, article.published_at)
+
+    sorted_articles = sorted(deduplicated, key=priority_sort)
 
     # Limit to max articles
-    filtered_articles = deduplicated[:max_articles]
-    print(f"  ✓ Final filtered: {len(filtered_articles)} articles")
+    filtered_articles = sorted_articles[:max_articles]
+
+    logger.info(
+        "filter_node_complete",
+        input=len(raw_articles),
+        output=len(filtered_articles),
+    )
 
     return {
         **state,
@@ -128,17 +168,17 @@ async def analyze_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with analyzed_articles populated
     """
-    provider_label = {
-        "anthropic": "Claude",
-        "openai": "OpenAI",
-        "google": "Google",
-    }.get(settings.llm_provider, settings.llm_provider)
-    print(f"🤖 Analyzing articles with {provider_label}...")
-
     filtered_articles = state["filtered_articles"]
 
+    logger.info(
+        "analyze_node_start",
+        article_count=len(filtered_articles),
+        provider=settings.llm_provider,
+        model=settings.llm_model,
+    )
+
     if not filtered_articles:
-        print("  ⚠️ No articles to analyze")
+        logger.warning("no_articles_to_analyze")
         return {
             **state,
             "analyzed_articles": [],
@@ -148,13 +188,19 @@ async def analyze_node(state: BriefState) -> BriefState:
     analyzer = LLMAnalyzer()
     analyzed_articles = await analyzer.analyze_batch(filtered_articles)
 
-    print(f"  ✓ Analyzed {len(analyzed_articles)} articles")
+    logger.info("llm_analysis_complete", analyzed=len(analyzed_articles))
 
     # Filter by minimum importance score
     filtered_by_score = [
         a for a in analyzed_articles if a.importance_score >= settings.min_importance_score
     ]
-    print(f"  ✓ After importance filter: {len(filtered_by_score)} articles")
+
+    logger.info(
+        "analyze_node_complete",
+        analyzed=len(analyzed_articles),
+        passed_filter=len(filtered_by_score),
+        min_score=settings.min_importance_score,
+    )
 
     return {
         **state,
@@ -171,18 +217,23 @@ async def format_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with report populated
     """
-    print("📝 Formatting report...")
-
     analyzed_articles = state["analyzed_articles"]
     date = state["date"]
+
+    logger.info("format_node_start", article_count=len(analyzed_articles))
+
     formatter = MarkdownFormatter()
 
     if not analyzed_articles:
-        print("  ⚠️ No articles to format")
+        logger.warning("no_articles_to_format")
         report = formatter.format(date, [])
     else:
         report = formatter.format(date, analyzed_articles)
-        print(f"  ✓ Report generated ({len(report.markdown_content)} characters)")
+
+    logger.info(
+        "format_node_complete",
+        content_length=len(report.markdown_content),
+    )
 
     return {
         **state,
@@ -199,7 +250,7 @@ async def send_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with telegram_message_id and report_path populated
     """
-    print("📤 Sending report...")
+    logger.info("send_node_start")
 
     report = state["report"]
     analyzed_articles = state.get("analyzed_articles", [])
@@ -207,7 +258,7 @@ async def send_node(state: BriefState) -> BriefState:
 
     if not report:
         error_msg = "No report to send"
-        print(f"  ✗ {error_msg}")
+        logger.error("send_error", reason=error_msg)
         errors.append(error_msg)
         return {
             **state,
@@ -215,7 +266,7 @@ async def send_node(state: BriefState) -> BriefState:
         }
 
     if not analyzed_articles:
-        print("  ⚠️ No articles to send; skipping Telegram push")
+        logger.warning("no_articles_skipping_telegram")
         return {
             **state,
             "telegram_message_id": None,
@@ -223,14 +274,14 @@ async def send_node(state: BriefState) -> BriefState:
         }
 
     # Save report to file
+    report_path = None
     try:
         report_path = save_report(report)
-        print(f"  ✓ Report saved to {report_path}")
+        logger.info("report_saved", path=str(report_path))
     except Exception as e:
         error_msg = f"Error saving report: {e}"
-        print(f"  ✗ {error_msg}")
+        logger.error("report_save_error", error=str(e))
         errors.append(error_msg)
-        report_path = None
 
     # Send to Telegram
     telegram_message_id = None
@@ -238,14 +289,14 @@ async def send_node(state: BriefState) -> BriefState:
     try:
         telegram_message_id = await sender.send_report(report)
         if telegram_message_id:
-            print(f"  ✓ Sent to Telegram (message_id: {telegram_message_id})")
+            logger.info("telegram_sent", message_id=telegram_message_id)
         else:
             error_msg = "Failed to send to Telegram"
-            print(f"  ✗ {error_msg}")
+            logger.error("telegram_send_failed")
             errors.append(error_msg)
     except Exception as e:
         error_msg = f"Error sending to Telegram: {e}"
-        print(f"  ✗ {error_msg}")
+        logger.error("telegram_error", error=str(e))
         errors.append(error_msg)
 
         # Send error notification
@@ -254,18 +305,25 @@ async def send_node(state: BriefState) -> BriefState:
         except Exception:
             pass
 
-    if telegram_message_id and state.get("analyzed_articles"):
+    # Record seen articles for deduplication
+    if telegram_message_id and analyzed_articles:
         try:
             record_seen_articles(
-                [a.article for a in state["analyzed_articles"]],
+                [a.article for a in analyzed_articles],
                 settings.dedup_history_path,
                 settings.dedup_history_days,
             )
-            print("  ✓ Updated dedup history")
+            logger.info("dedup_history_updated", count=len(analyzed_articles))
         except Exception as e:
             error_msg = f"Error updating dedup history: {e}"
-            print(f"  ✗ {error_msg}")
+            logger.error("dedup_history_error", error=str(e))
             errors.append(error_msg)
+
+    logger.info(
+        "send_node_complete",
+        telegram_sent=telegram_message_id is not None,
+        report_saved=report_path is not None,
+    )
 
     return {
         **state,

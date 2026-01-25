@@ -1,12 +1,23 @@
-name: Daily AI News Brief
+name: AI News Brief
 
 on:
-  # Scheduled run at UTC 00:00 and 12:00
+  # Scheduled run every 4 hours for better real-time coverage
   schedule:
-    - cron: '0 0,12 * * *'
+    - cron: '0 */4 * * *'  # Every 4 hours: 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC
 
   # Allow manual trigger
   workflow_dispatch:
+    inputs:
+      log_level:
+        description: 'Log level (DEBUG, INFO, WARNING, ERROR)'
+        required: false
+        default: 'INFO'
+        type: choice
+        options:
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
 
 jobs:
   generate-brief:
@@ -93,6 +104,13 @@ jobs:
           # Optional: Reddit Configuration
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+
+          # Optional: GitHub Token for higher rate limits
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Logging
+          LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
+          LOG_FORMAT: json
         run: |
           python -m src.agent
 
@@ -103,6 +121,16 @@ jobs:
           name: dedup-history
           path: reports/seen_articles.json
           if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workflow-logs-${{ github.run_number }}
+          path: reports/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Notify on failure
         if: failure()
@@ -112,5 +140,25 @@ jobs:
         run: |
           curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
-            -d "text=⚠️ AI News Brief workflow failed on $(date +'%Y-%m-%d'). Check GitHub Actions for details." \
+            -d "text=⚠️ AI News Brief workflow failed at $(date -u +'%Y-%m-%d %H:%M UTC'). Check GitHub Actions for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             -d "parse_mode=Markdown"
+
+  # Health check job - runs less frequently
+  health-check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    needs: generate-brief
+    steps:
+      - name: Report success
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # Only send health check notification once per day (at 00:00 UTC)
+          HOUR=$(date -u +%H)
+          if [ "$HOUR" = "00" ]; then
+            curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+              -d "chat_id=${TELEGRAM_CHAT_ID}" \
+              -d "text=✅ AI News Brief daily health check passed at $(date -u +'%Y-%m-%d')." \
+              -d "parse_mode=Markdown"
+          fi
