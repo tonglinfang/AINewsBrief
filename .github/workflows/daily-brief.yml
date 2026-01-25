@@ -1,0 +1,74 @@
+name: Daily AI News Brief
+
+on:
+  # Scheduled run at UTC 00:00 (Beijing 08:00)
+  schedule:
+    - cron: '0 0 * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  generate-brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run AI News Brief
+        env:
+          # LLM Configuration
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'claude-sonnet-4-5-20250929' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+          # Telegram Configuration
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+          # Optional: Reddit Configuration
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+        run: |
+          python -m src.agent
+
+      - name: Commit and push report
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Add generated reports
+          git add reports/*.md
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No new reports to commit"
+          else
+            git commit -m "Add AI News Brief - $(date +'%Y-%m-%d')"
+            git push
+          fi
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=⚠️ AI News Brief workflow failed on $(date +'%Y-%m-%d'). Check GitHub Actions for details." \
+            -d "parse_mode=Markdown"
