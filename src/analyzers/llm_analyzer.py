@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import List, Union
+from typing import List
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.models.article import Article
@@ -225,13 +225,7 @@ class LLMAnalyzer:
                     raise ValueError(f"Missing required field: {field}")
 
             # Validate category
-            valid_categories: List[CategoryType] = [
-                "Breaking News",
-                "Research",
-                "Tools/Products",
-                "Business",
-                "Tutorial",
-            ]
+            valid_categories = ["Breaking News", "Research", "Tools/Products", "Business", "Tutorial"]
             if data["category"] not in valid_categories:
                 data["category"] = "Tools/Products"
 

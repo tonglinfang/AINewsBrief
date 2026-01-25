@@ -111,14 +111,7 @@ class MarkdownFormatter:
             grouped[category].sort(key=lambda x: x.importance_score, reverse=True)
 
         # Return in desired order
-        ordered_categories: List[CategoryType] = [
-            "Breaking News",
-            "Research",
-            "Tools/Products",
-            "Business",
-            "Tutorial",
-        ]
-
+        ordered_categories = ["Breaking News", "Research", "Tools/Products", "Business", "Tutorial"]
         return {cat: grouped[cat] for cat in ordered_categories if cat in grouped}
 
     def _format_relative_time(self, dt: datetime) -> str:
@@ -138,11 +131,13 @@ class MarkdownFormatter:
 
         if delta.days > 0:
             return f"{delta.days}天前"
-        elif delta.seconds >= 3600:
-            hours = delta.seconds // 3600
+
+        hours = delta.seconds // 3600
+        if hours > 0:
             return f"{hours}小時前"
-        elif delta.seconds >= 60:
-            minutes = delta.seconds // 60
+
+        minutes = delta.seconds // 60
+        if minutes > 0:
             return f"{minutes}分鐘前"
-        else:
-            return "剛剛"
+
+        return "剛剛"

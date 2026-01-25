@@ -112,7 +112,12 @@ async def analyze_node(state: BriefState) -> BriefState:
     Returns:
         Updated state with analyzed_articles populated
     """
-    print("🤖 Analyzing articles with Claude...")
+    provider_label = {
+        "anthropic": "Claude",
+        "openai": "OpenAI",
+        "google": "Google",
+    }.get(settings.llm_provider, settings.llm_provider)
+    print(f"🤖 Analyzing articles with {provider_label}...")
 
     filtered_articles = state["filtered_articles"]
 
@@ -154,22 +159,14 @@ async def format_node(state: BriefState) -> BriefState:
 
     analyzed_articles = state["analyzed_articles"]
     date = state["date"]
+    formatter = MarkdownFormatter()
 
     if not analyzed_articles:
         print("  ⚠️ No articles to format")
-        # Create empty report
-        formatter = MarkdownFormatter()
-        empty_report = formatter.format(date, [])
-        return {
-            **state,
-            "report": empty_report,
-        }
-
-    # Format report
-    formatter = MarkdownFormatter()
-    report = formatter.format(date, analyzed_articles)
-
-    print(f"  ✓ Report generated ({len(report.markdown_content)} characters)")
+        report = formatter.format(date, [])
+    else:
+        report = formatter.format(date, analyzed_articles)
+        print(f"  ✓ Report generated ({len(report.markdown_content)} characters)")
 
     return {
         **state,
@@ -212,8 +209,8 @@ async def send_node(state: BriefState) -> BriefState:
 
     # Send to Telegram
     telegram_message_id = None
+    sender = TelegramSender()
     try:
-        sender = TelegramSender()
         telegram_message_id = await sender.send_report(report)
         if telegram_message_id:
             print(f"  ✓ Sent to Telegram (message_id: {telegram_message_id})")
@@ -228,7 +225,6 @@ async def send_node(state: BriefState) -> BriefState:
 
         # Send error notification
         try:
-            sender = TelegramSender()
             await sender.send_error(error_msg)
         except Exception:
             pass
