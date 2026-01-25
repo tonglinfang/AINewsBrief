@@ -61,6 +61,15 @@ class Settings(BaseSettings):
         default=24, description="Only fetch articles from last N hours"
     )
 
+    # Deduplication history
+    dedup_history_path: str = Field(
+        default="reports/seen_articles.json",
+        description="Path to persisted deduplication history file",
+    )
+    dedup_history_days: int = Field(
+        default=30, ge=1, le=365, description="History retention window in days"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

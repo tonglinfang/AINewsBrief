@@ -27,6 +27,13 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Download dedup history
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: dedup-history
+          path: reports
+
       - name: Run AI News Brief
         env:
           # LLM Configuration
@@ -46,21 +53,13 @@ jobs:
         run: |
           python -m src.agent
 
-      - name: Commit and push report
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-
-          # Add generated reports
-          git add reports/*.md
-
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "No new reports to commit"
-          else
-            git commit -m "Add AI News Brief - $(date +'%Y-%m-%d')"
-            git push
-          fi
+      - name: Upload dedup history
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dedup-history
+          path: reports/seen_articles.json
+          if-no-files-found: ignore
 
       - name: Notify on failure
         if: failure()

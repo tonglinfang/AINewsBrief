@@ -12,6 +12,11 @@ from src.tools.telegram_sender import TelegramSender
 from src.analyzers.llm_analyzer import LLMAnalyzer
 from src.formatters.markdown_formatter import MarkdownFormatter
 from src.utils.deduplication import deduplicate_articles
+from src.utils.dedup_history import (
+    filter_previously_seen,
+    load_dedup_history,
+    record_seen_articles,
+)
 from src.utils.report_saver import save_report
 from src.config import settings
 from datetime import datetime, timedelta, timezone
@@ -90,7 +95,18 @@ async def filter_node(state: BriefState) -> BriefState:
     print(f"  ✓ After content filter: {len(content_filtered)} articles")
 
     # Deduplicate
-    deduplicated = deduplicate_articles(content_filtered)
+    seen_urls, seen_titles = load_dedup_history(
+        settings.dedup_history_path, settings.dedup_history_days
+    )
+    history_filtered = filter_previously_seen(
+        content_filtered,
+        seen_urls,
+        seen_titles,
+        title_similarity_threshold=0.8,
+    )
+    print(f"  ✓ After history filter: {len(history_filtered)} articles")
+
+    deduplicated = deduplicate_articles(history_filtered)
     print(f"  ✓ After deduplication: {len(deduplicated)} articles")
 
     # Limit to max articles
@@ -228,6 +244,19 @@ async def send_node(state: BriefState) -> BriefState:
             await sender.send_error(error_msg)
         except Exception:
             pass
+
+    if telegram_message_id and state.get("analyzed_articles"):
+        try:
+            record_seen_articles(
+                [a.article for a in state["analyzed_articles"]],
+                settings.dedup_history_path,
+                settings.dedup_history_days,
+            )
+            print("  ✓ Updated dedup history")
+        except Exception as e:
+            error_msg = f"Error updating dedup history: {e}"
+            print(f"  ✗ {error_msg}")
+            errors.append(error_msg)
 
     return {
         **state,
