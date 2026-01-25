@@ -202,6 +202,7 @@ async def send_node(state: BriefState) -> BriefState:
     print("📤 Sending report...")
 
     report = state["report"]
+    analyzed_articles = state.get("analyzed_articles", [])
     errors: List[str] = list(state.get("errors", []))
 
     if not report:
@@ -210,6 +211,14 @@ async def send_node(state: BriefState) -> BriefState:
         errors.append(error_msg)
         return {
             **state,
+            "errors": errors,
+        }
+
+    if not analyzed_articles:
+        print("  ⚠️ No articles to send; skipping Telegram push")
+        return {
+            **state,
+            "telegram_message_id": None,
             "errors": errors,
         }
 
