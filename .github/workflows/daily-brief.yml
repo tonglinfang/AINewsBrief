@@ -44,6 +44,7 @@ jobs:
               per_page: 20,
             });
             let selectedRunId = '';
+            let selectedArtifactId = '';
             for (const run of data.workflow_runs) {
               if (run.conclusion !== 'success' || run.id === context.runId) continue;
               const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
@@ -55,23 +56,25 @@ jobs:
               const history = artifacts.data.artifacts.find(a => a.name === 'dedup-history');
               if (history && !history.expired) {
                 selectedRunId = String(run.id);
+                selectedArtifactId = String(history.id);
                 break;
               }
             }
-            if (!selectedRunId) {
+            if (!selectedRunId || !selectedArtifactId) {
               core.setOutput('run_id', '');
+              core.setOutput('artifact_id', '');
               core.setOutput('has_history', 'false');
               return;
             }
             core.setOutput('run_id', selectedRunId);
+            core.setOutput('artifact_id', selectedArtifactId);
             core.setOutput('has_history', 'true');
 
       - name: Download dedup history
         uses: actions/download-artifact@v4
         if: ${{ steps.find_history.outputs.has_history == 'true' }}
         with:
-          name: dedup-history
-          run-id: ${{ steps.find_history.outputs.run_id }}
+          artifact-id: ${{ steps.find_history.outputs.artifact_id }}
           path: reports
 
       - name: Run AI News Brief
