@@ -43,23 +43,28 @@ jobs:
               status: 'completed',
               per_page: 20,
             });
-            const run = data.workflow_runs.find(r =>
-              r.conclusion === 'success' && r.id !== context.runId
-            );
-            if (!run) {
+            let selectedRunId = '';
+            for (const run of data.workflow_runs) {
+              if (run.conclusion !== 'success' || run.id === context.runId) continue;
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              const history = artifacts.data.artifacts.find(a => a.name === 'dedup-history');
+              if (history && !history.expired) {
+                selectedRunId = String(run.id);
+                break;
+              }
+            }
+            if (!selectedRunId) {
               core.setOutput('run_id', '');
               core.setOutput('has_history', 'false');
               return;
             }
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: run.id,
-              per_page: 100,
-            });
-            const hasHistory = artifacts.data.artifacts.some(a => a.name === 'dedup-history');
-            core.setOutput('run_id', hasHistory ? String(run.id) : '');
-            core.setOutput('has_history', hasHistory ? 'true' : 'false');
+            core.setOutput('run_id', selectedRunId);
+            core.setOutput('has_history', 'true');
 
       - name: Download dedup history
         uses: actions/download-artifact@v4
