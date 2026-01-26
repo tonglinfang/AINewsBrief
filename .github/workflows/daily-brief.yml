@@ -113,6 +113,14 @@ jobs:
           # Optional: GitHub Token for higher rate limits
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+          # Data source toggles
+          ENABLE_RSS: 'true'
+          ENABLE_REDDIT: 'true'
+          ENABLE_HACKERNEWS: 'true'
+          ENABLE_ARXIV: 'true'
+          ENABLE_BLOGS: 'true'
+          ENABLE_GITHUB: 'true'
+
           # Logging
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
           LOG_FORMAT: json
