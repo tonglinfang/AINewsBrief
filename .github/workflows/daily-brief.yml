@@ -1,6 +1,11 @@
 name: Daily AI News Brief
 
 on:
+  # Trigger on push to main branch
+  push:
+    branches:
+      - main
+
   # Scheduled run at UTC 00:00 and 12:00
   schedule:
     - cron: '0 0,12 * * *'
