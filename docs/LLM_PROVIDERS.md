@@ -107,16 +107,58 @@ LLM_MODEL=gemini-2.0-flash-exp
 
 ---
 
+### 4. Zhipu AI (GLM - 智谱AI)
+
+**優勢**:
+- 國產大模型，優秀的中文理解能力
+- 價格實惠，性價比高
+- 符合國內合規要求
+- 低延遲，適合國內網絡環境
+
+**配置示例**:
+```env
+LLM_PROVIDER=zhipu
+ZHIPU_API_KEY=your_key_here
+LLM_MODEL=glm-4-plus
+```
+
+**可用模型**:
+| 模型 | 特點 | 成本（每 1M tokens） | 推薦場景 |
+|------|------|---------------------|---------|
+| `glm-4-plus` | 最新旗艦模型 | ¥50 輸入 / ¥50 輸出 | **推薦**，最佳中文質量 |
+| `glm-4-0520` | 高性能版本 | ¥100 輸入 / ¥100 輸出 | 需要最高準確性 |
+| `glm-4-air` | 快速經濟 | ¥1 輸入 / ¥1 輸出 | 日常使用 |
+| `glm-4-airx` | 超快速 | ¥1 輸入 / ¥1 輸出 | 預算優先 |
+| `glm-4-flash` | 極速版本 | ¥0.1 輸入 / ¥0.1 輸出 | 大量請求場景 |
+
+**獲取 API Key**:
+1. 訪問 [智谱AI開放平台](https://open.bigmodel.cn/)
+2. 註冊並登錄
+3. 進入控制台創建 API Key
+4. 新用戶通常有免費額度
+
+**每日成本估算**:
+- 約 50 篇文章 × 2K tokens/篇 = 100K tokens
+- 使用 GLM-4 Plus: ¥50/M tokens × 0.1M × 2 = **¥10/天** (~$1.40)
+- 使用 GLM-4 Air: ¥1/M tokens × 0.1M × 2 = **¥0.20/天** (~$0.03) 🎉
+- 使用 GLM-4 Flash: ¥0.1/M tokens × 0.1M × 2 = **¥0.02/天** (~$0.003) 🔥
+
+**免費額度**:
+- 新用戶註冊贈送免費 tokens
+- 具體額度以官網最新政策為準
+
+---
+
 ## 選擇建議
 
 ### 按預算選擇
 
 | 預算 | 推薦配置 | 每日成本 |
 |------|---------|---------|
-| 💰 免費/極低 | Google Gemini 2.0 Flash | $0 |
-| 💰💰 經濟型 | OpenAI GPT-4o-mini | ~$0.08 |
+| 💰 免費/極低 | Google Gemini 2.0 Flash 或 Zhipu GLM-4 Flash | $0 - $0.003 |
+| 💰💰 經濟型 | Zhipu GLM-4 Air 或 OpenAI GPT-4o-mini | ~$0.03-0.08 |
 | 💰💰💰 標準型 | OpenAI GPT-4o 或 Google Gemini 1.5 Pro | ~$0.60-1.25 |
-| 💰💰💰💰 高質量 | Anthropic Claude Sonnet 4.5 | ~$1.80 |
+| 💰💰💰💰 高質量 | Zhipu GLM-4 Plus 或 Anthropic Claude Sonnet 4.5 | ~$1.40-1.80 |
 | 💰💰💰💰💰 最高質量 | Anthropic Claude Opus 4 | ~$9.00 |
 
 ### 按需求選擇
@@ -144,10 +186,17 @@ LLM_MODEL=gpt-4o
 
 **預算有限**:
 ```env
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o-mini
+LLM_PROVIDER=zhipu
+LLM_MODEL=glm-4-air
 ```
-- 性價比最高
+- 性價比最高，優秀的中文支持
+
+**國內用戶（中文為主）**:
+```env
+LLM_PROVIDER=zhipu
+LLM_MODEL=glm-4-plus
+```
+- 國產大模型，低延遲，合規友好
 
 ---
 
@@ -164,7 +213,7 @@ nano .env  # 或使用你喜歡的編輯器
 
 ```env
 # 選擇提供商
-LLM_PROVIDER=anthropic  # 或 openai, google
+LLM_PROVIDER=anthropic  # 或 openai, google, zhipu
 
 # 設置對應的 API key
 ANTHROPIC_API_KEY=sk-ant-your_key_here
@@ -217,6 +266,9 @@ LLM_MODEL=gpt-4o
 | OpenAI | GPT-4o-mini | ~2 分鐘 | ⭐⭐⭐ | ⭐⭐⭐ | $0.08 |
 | Google | Gemini 2.0 Flash | ~1 分鐘 | ⭐⭐⭐⭐ | ⭐⭐⭐ | $0 |
 | Google | Gemini 1.5 Pro | ~3 分鐘 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | $0.63 |
+| Zhipu | GLM-4 Plus | ~2 分鐘 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | $1.40 |
+| Zhipu | GLM-4 Air | ~1 分鐘 | ⭐⭐⭐ | ⭐⭐⭐⭐ | $0.03 |
+| Zhipu | GLM-4 Flash | ~1 分鐘 | ⭐⭐⭐ | ⭐⭐⭐⭐ | $0.003 |
 
 ---
 
@@ -234,7 +286,7 @@ cat .env | grep API_KEY
 
 檢查 `LLM_PROVIDER` 值是否正確：
 ```env
-LLM_PROVIDER=anthropic  # 必須是: anthropic, openai, 或 google
+LLM_PROVIDER=anthropic  # 必須是: anthropic, openai, google, 或 zhipu
 ```
 
 ### 模型名稱錯誤

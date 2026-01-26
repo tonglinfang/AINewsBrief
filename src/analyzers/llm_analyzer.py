@@ -63,10 +63,23 @@ def create_llm() -> BaseChatModel:
             max_output_tokens=settings.llm_max_tokens,
         )
 
+    elif provider == "zhipu":
+        if not settings.zhipu_api_key:
+            raise ValueError("ZHIPU_API_KEY is required for Zhipu AI provider")
+
+        from langchain_community.chat_models import ChatZhipuAI
+
+        return ChatZhipuAI(
+            model=settings.llm_model,
+            api_key=settings.zhipu_api_key,
+            temperature=settings.llm_temperature,
+            max_tokens=settings.llm_max_tokens,
+        )
+
     else:
         raise ValueError(
             f"Unsupported LLM provider: {provider}. "
-            f"Supported providers: anthropic, openai, google"
+            f"Supported providers: anthropic, openai, google, zhipu"
         )
 
 

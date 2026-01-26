@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
-LLMProvider = Literal["anthropic", "openai", "google"]
+LLMProvider = Literal["anthropic", "openai", "google", "zhipu"]
 
 
 class Settings(BaseSettings):
@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", description="Anthropic API key")
     openai_api_key: str = Field(default="", description="OpenAI API key")
     google_api_key: str = Field(default="", description="Google API key")
+    zhipu_api_key: str = Field(default="", description="Zhipu AI (GLM) API key")
 
     # Telegram Configuration
     telegram_bot_token: str = Field(..., description="Telegram bot token")
