@@ -2,9 +2,9 @@ name: AI News Brief
 
 on:
   # Trigger on push to main branch
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
 
   # Scheduled run every 4 hours for better real-time coverage
   schedule:
