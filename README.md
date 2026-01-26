@@ -207,6 +207,14 @@ MIN_IMPORTANCE_SCORE=5         # 最低重要性評分（0-10）
 MAX_ARTICLES_PER_SOURCE=20     # 每個來源最多抓取的文章數
 ARTICLE_AGE_HOURS=24           # 只抓取最近 N 小時的文章
 
+# Data source toggles
+ENABLE_RSS=true                # RSS feeds
+ENABLE_REDDIT=true             # Reddit
+ENABLE_HACKERNEWS=true         # HackerNews
+ENABLE_ARXIV=true              # ArXiv
+ENABLE_BLOGS=true              # Official blogs
+ENABLE_GITHUB=true             # GitHub releases
+
 # LLM 設置
 LLM_MODEL=claude-sonnet-4-5-20250929
 LLM_TEMPERATURE=0.3

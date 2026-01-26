@@ -39,19 +39,39 @@ async def fetch_news_node(state: BriefState) -> BriefState:
     """
     logger.info("fetch_node_start")
 
-    # Initialize all fetchers (including new ones)
-    fetchers = [
-        ("RSS Feeds", RSSFetcher().fetch_all()),
-        ("Reddit", RedditFetcher().fetch_all()),
-        ("HackerNews", HackerNewsFetcher().fetch_all()),
-        ("ArXiv", ArxivFetcher().fetch_all()),
-        ("Official Blogs", BlogFetcher().fetch_all()),
-        ("GitHub Releases", GitHubFetcher().fetch_all()),
-    ]
+    # Initialize enabled fetchers
+    fetchers = []
+    if settings.enable_rss:
+        fetchers.append(("RSS Feeds", RSSFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="RSS Feeds")
+    if settings.enable_reddit:
+        fetchers.append(("Reddit", RedditFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="Reddit")
+    if settings.enable_hackernews:
+        fetchers.append(("HackerNews", HackerNewsFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="HackerNews")
+    if settings.enable_arxiv:
+        fetchers.append(("ArXiv", ArxivFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="ArXiv")
+    if settings.enable_blogs:
+        fetchers.append(("Official Blogs", BlogFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="Official Blogs")
+    if settings.enable_github:
+        fetchers.append(("GitHub Releases", GitHubFetcher().fetch_all()))
+    else:
+        logger.info("source_disabled", source="GitHub Releases")
 
     # Fetch concurrently
-    tasks = [fetcher[1] for fetcher in fetchers]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    if fetchers:
+        tasks = [fetcher[1] for fetcher in fetchers]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+    else:
+        results = []
 
     # Collect articles
     raw_articles: List[Article] = []

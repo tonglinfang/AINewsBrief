@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     article_age_hours: int = Field(
         default=24, description="Only fetch articles from last N hours"
     )
+    enable_rss: bool = Field(default=True, description="Enable RSS feed fetching")
+    enable_reddit: bool = Field(default=True, description="Enable Reddit fetching")
+    enable_hackernews: bool = Field(default=True, description="Enable HackerNews fetching")
+    enable_arxiv: bool = Field(default=True, description="Enable ArXiv fetching")
+    enable_blogs: bool = Field(default=True, description="Enable official blog fetching")
+    enable_github: bool = Field(default=True, description="Enable GitHub releases fetching")
 
     # Deduplication history
     dedup_history_path: str = Field(
