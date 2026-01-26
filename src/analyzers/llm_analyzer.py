@@ -3,6 +3,7 @@
 import asyncio
 import json
 from typing import List
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 from src.models.article import Article
@@ -133,6 +134,20 @@ class LLMAnalyzer:
             model=settings.llm_model,
         )
 
+    @staticmethod
+    def _is_rate_limit_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "429" in message or "too many requests" in message or "rate limit" in message
+
+    @retry(
+        retry=retry_if_exception(_is_rate_limit_error),
+        stop=stop_after_attempt(4),
+        wait=wait_exponential_jitter(initial=1, max=10),
+        reraise=True,
+    )
+    async def _ainvoke_with_retry(self, messages: List[object]):
+        return await self.llm.ainvoke(messages)
+
     async def analyze_batch(self, articles: List[Article]) -> List[AnalysisResult]:
         """Analyze multiple articles concurrently.
 
@@ -186,7 +201,7 @@ class LLMAnalyzer:
                 HumanMessage(content=user_prompt),
             ]
 
-            response = await self.llm.ainvoke(messages)
+            response = await self._ainvoke_with_retry(messages)
 
             # Parse response
             analysis_data = self._parse_response(response.content)
