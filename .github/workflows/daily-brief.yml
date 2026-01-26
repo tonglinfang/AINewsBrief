@@ -14,17 +14,6 @@ on:
           - DEBUG
           - INFO
           - WARNING
-            - ERRORorkflow_dispatch:
-    inputs:
-      log_level:
-        description: 'Log level (DEBUG, INFO, WARNING, ERROR)'
-        required: false
-        default: 'INFO'
-        type: choice
-        options:
-          - DEBUG
-          - INFO
-          - WARNING
           - ERROR
 
 jobs:
