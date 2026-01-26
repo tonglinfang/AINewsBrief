@@ -47,9 +47,10 @@ python -m pip install --upgrade pip
 echo.
 
 REM 安装依赖
-echo 📦 安装依赖包（这可能需要几分钟）...
+echo Installing dependencies...
 pip install -r requirements.txt
-if errorlevel 1 (
+pip install zhipuai
+if %errorlevel% neq 0 (
     echo.
     echo ❌ 依赖安装失败！
     echo.
