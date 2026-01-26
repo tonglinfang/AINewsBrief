@@ -115,11 +115,11 @@ jobs:
 
           # Data source toggles
           ENABLE_RSS: 'true'
-          ENABLE_REDDIT: 'true'
-          ENABLE_HACKERNEWS: 'true'
-          ENABLE_ARXIV: 'true'
-          ENABLE_BLOGS: 'true'
-          ENABLE_GITHUB: 'true'
+          ENABLE_REDDIT: 'false'
+          ENABLE_HACKERNEWS: 'false'
+          ENABLE_ARXIV: 'false'
+          ENABLE_BLOGS: 'false'
+          ENABLE_GITHUB: 'false'
 
           # Logging
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
