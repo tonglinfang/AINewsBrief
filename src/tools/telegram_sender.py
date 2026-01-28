@@ -3,7 +3,6 @@
 import asyncio
 from typing import Optional
 from telegram import Bot
-from telegram.constants import ParseMode
 from src.models.report import DailyReport
 from src.config import settings
 
@@ -36,7 +35,6 @@ class TelegramSender:
                 message = await self.bot.send_message(
                     chat_id=self.chat_id,
                     text=content,
-                    parse_mode=ParseMode.MARKDOWN,
                     disable_web_page_preview=True,
                 )
                 return str(message.message_id)
@@ -45,11 +43,13 @@ class TelegramSender:
                 return await self._send_long_message(content)
 
         except Exception as e:
-            print(f"Error sending Telegram message: {e}")
+            print(f"Error sending Telegram message: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     async def _send_long_message(self, content: str) -> Optional[str]:
-        """Send long message by splitting into multiple parts.
+        """Send long message by splitting into chunks.
 
         Args:
             content: Message content to split
@@ -58,44 +58,49 @@ class TelegramSender:
             Last message ID if successful
         """
         try:
-            # Split by sections (marked by ##)
-            sections = content.split("\n## ")
-            current_message = sections[0]
-            last_message_id = None
-
-            for i, section in enumerate(sections[1:], 1):
-                section_text = f"\n## {section}"
-
-                # Check if adding this section would exceed limit
-                if len(current_message) + len(section_text) > self.MAX_MESSAGE_LENGTH - 100:
-                    # Send current message
-                    message = await self.bot.send_message(
-                        chat_id=self.chat_id,
-                        text=current_message,
-                        parse_mode=ParseMode.MARKDOWN,
-                        disable_web_page_preview=True,
-                    )
-                    last_message_id = str(message.message_id)
-
-                    # Start new message
-                    current_message = section_text
+            messages_to_send = []
+            current_chunk = ""
+            
+            # Split by lines to preserve formatting
+            lines = content.split('\n')
+            
+            for line in lines:
+                # Check if adding this line would exceed limit
+                test_chunk = current_chunk + '\n' + line if current_chunk else line
+                
+                if len(test_chunk) > self.MAX_MESSAGE_LENGTH - 100:
+                    # Current chunk is full, save it and start new one
+                    if current_chunk:
+                        messages_to_send.append(current_chunk)
+                    current_chunk = line
                 else:
-                    current_message += section_text
-
-            # Send remaining content
-            if current_message:
+                    current_chunk = test_chunk
+            
+            # Add remaining content
+            if current_chunk:
+                messages_to_send.append(current_chunk)
+            
+            # Send all chunks
+            last_message_id = None
+            
+            for i, chunk in enumerate(messages_to_send, 1):
                 message = await self.bot.send_message(
                     chat_id=self.chat_id,
-                    text=current_message,
-                    parse_mode=ParseMode.MARKDOWN,
+                    text=chunk,
                     disable_web_page_preview=True,
                 )
                 last_message_id = str(message.message_id)
-
+                
+                # Small delay between messages to avoid rate limits
+                if i < len(messages_to_send):
+                    await asyncio.sleep(0.5)
+            
             return last_message_id
 
         except Exception as e:
-            print(f"Error sending split messages: {e}")
+            print(f"Error sending split messages: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     async def send_error(self, error_message: str) -> None:
@@ -107,8 +112,7 @@ class TelegramSender:
         try:
             await self.bot.send_message(
                 chat_id=self.chat_id,
-                text=f"⚠️ *Error in AI News Brief*\n\n```\n{error_message}\n```",
-                parse_mode=ParseMode.MARKDOWN,
+                text=f"⚠️ Error in AI News Brief\n\n{error_message}",
             )
         except Exception as e:
             print(f"Error sending error notification: {e}")
