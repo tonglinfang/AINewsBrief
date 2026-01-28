@@ -40,7 +40,7 @@ class MarkdownFormatter:
 {% endif %}
 {% endfor %}
 
-來源：{{ llm_provider|capitalize }} {{ llm_model }}
+來源：AINewsBrief｜Powered by {{ llm_provider|capitalize }} {{ llm_model }}
 """
 
     def __init__(self):
@@ -70,7 +70,7 @@ class MarkdownFormatter:
 
         # Generate markdown
         markdown_content = self.template.render(
-            date=date.strftime("%Y-%m-%d"),
+            date=date.strftime("%Y-%m-%d %H:%M:%S"),
             total_articles=total_articles,
             average_importance=f"{average_importance:.1f}",
             articles_by_category=articles_by_category,
