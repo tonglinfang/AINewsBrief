@@ -90,8 +90,8 @@ jobs:
       - name: Run AI News Brief
         env:
           # LLM Configuration
-          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'anthropic' }}
-          LLM_MODEL: ${{ secrets.LLM_MODEL || 'claude-sonnet-4-5-20250929' }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER || 'google' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'gemini-2.0-flash' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
@@ -110,11 +110,11 @@ jobs:
 
           # Data source toggles
           ENABLE_RSS: 'true'
-          ENABLE_REDDIT: 'false'
-          ENABLE_HACKERNEWS: 'false'
-          ENABLE_ARXIV: 'false'
-          ENABLE_BLOGS: 'false'
-          ENABLE_GITHUB: 'false'
+          ENABLE_REDDIT: 'true'
+          ENABLE_HACKERNEWS: 'true'
+          ENABLE_ARXIV: 'true'
+          ENABLE_BLOGS: 'true'
+          ENABLE_GITHUB: 'true'
 
           # Logging
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}
