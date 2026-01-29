@@ -25,6 +25,9 @@ class AnalysisResult(BaseModel):
     importance_score: int = Field(
         ..., ge=0, le=10, description="Importance score from 0-10"
     )
+    ai_relevance_score: int = Field(
+        default=10, ge=0, le=10, description="AI relevance score from 0-10"
+    )
     insight: str = Field(
         ..., description="Key insight: why important and impact (max 50 chars)", max_length=100
     )

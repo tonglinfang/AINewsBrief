@@ -100,3 +100,77 @@ def test_analysis_result_invalid_score():
             importance_score=15,  # Invalid: > 10
             insight="Test",
         )
+
+
+def test_analysis_result_ai_relevance_score():
+    """Test AnalysisResult with ai_relevance_score."""
+    article = Article(
+        title="Test",
+        url="https://example.com",
+        source="Test",
+        published_at=datetime.now(),
+        content="Test content",
+        tags=[],
+    )
+
+    # Test with explicit ai_relevance_score
+    analysis = AnalysisResult(
+        article=article,
+        title_cn="測試標題",
+        summary="Test summary",
+        category="Research",
+        importance_score=8,
+        ai_relevance_score=9,
+        insight="Test insight",
+    )
+
+    assert analysis.ai_relevance_score == 9
+    assert analysis.ai_relevance_score >= 0
+    assert analysis.ai_relevance_score <= 10
+
+
+def test_analysis_result_ai_relevance_default():
+    """Test AnalysisResult ai_relevance_score default value."""
+    article = Article(
+        title="Test",
+        url="https://example.com",
+        source="Test",
+        published_at=datetime.now(),
+        content="Test content",
+        tags=[],
+    )
+
+    # Test without ai_relevance_score (should default to 10)
+    analysis = AnalysisResult(
+        article=article,
+        title_cn="測試標題",
+        summary="Test summary",
+        category="Breaking News",
+        importance_score=8,
+        insight="Test insight",
+    )
+
+    assert analysis.ai_relevance_score == 10
+
+
+def test_analysis_result_invalid_ai_relevance():
+    """Test that invalid ai_relevance_score is handled."""
+    article = Article(
+        title="Test",
+        url="https://example.com",
+        source="Test",
+        published_at=datetime.now(),
+        content="Test content",
+        tags=[],
+    )
+
+    with pytest.raises(ValueError):
+        AnalysisResult(
+            article=article,
+            title_cn="測試標題",
+            summary="Test",
+            category="Breaking News",
+            importance_score=8,
+            ai_relevance_score=15,  # Invalid: > 10
+            insight="Test",
+        )
