@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     min_importance_score: int = Field(
         default=5, ge=0, le=10, description="Minimum importance score to include"
     )
+    min_ai_relevance_score: int = Field(
+        default=5, ge=0, le=10, description="Minimum AI relevance score to include (filters out non-AI content)"
+    )
 
     # Timezone
     timezone: str = Field(default="Asia/Shanghai", description="Timezone for reports")

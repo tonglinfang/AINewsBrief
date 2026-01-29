@@ -206,15 +206,23 @@ async def analyze_node(state: BriefState) -> BriefState:
     logger.info("llm_analysis_complete", analyzed=len(analyzed_articles))
 
     # Filter by minimum importance score
-    filtered_by_score = [
+    filtered_by_importance = [
         a for a in analyzed_articles if a.importance_score >= settings.min_importance_score
+    ]
+    logger.debug("filtered_by_importance", count=len(filtered_by_importance))
+
+    # Filter by minimum AI relevance score (remove non-AI content)
+    filtered_by_score = [
+        a for a in filtered_by_importance if a.ai_relevance_score >= settings.min_ai_relevance_score
     ]
 
     logger.info(
         "analyze_node_complete",
         analyzed=len(analyzed_articles),
-        passed_filter=len(filtered_by_score),
-        min_score=settings.min_importance_score,
+        passed_importance_filter=len(filtered_by_importance),
+        passed_relevance_filter=len(filtered_by_score),
+        min_importance=settings.min_importance_score,
+        min_ai_relevance=settings.min_ai_relevance_score,
     )
 
     return {

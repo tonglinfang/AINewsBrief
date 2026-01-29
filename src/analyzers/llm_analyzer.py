@@ -117,7 +117,13 @@ class LLMAnalyzer:
    - 7-8: 重要新聞或研究
    - 5-6: 有價值的更新
    - 0-4: 一般性內容
-5. **關鍵洞察** (insight): 50字以內的繁體中文關鍵洞察，說明為什麼重要、有什麼影響
+5. **AI 相關性評分** (ai_relevance_score): 0-10分，評估文章與 AI 技術本身的相關程度
+   - 9-10: AI 核心技術（新模型架構、訓練方法、AI 系統、LLM、神經網路等）
+   - 7-8: AI 工具/平台/框架（PyTorch、TensorFlow、AI 開發工具等）
+   - 5-6: AI 產業動態（AI 公司新聞、融資、政策等）
+   - 3-4: AI 應用案例（將 AI 用於其他領域，如醫療、體育、農業等，但重點不在 AI 技術本身）
+   - 0-2: 與 AI 幾乎無關（只是標題提到 AI，或只是使用 ML 做數據分析的其他領域研究）
+6. **關鍵洞察** (insight): 50字以內的繁體中文關鍵洞察，說明為什麼重要、有什麼影響
 
 請以 JSON 格式返回結果（確保所有中文內容為繁體中文）：
 {
@@ -125,6 +131,7 @@ class LLMAnalyzer:
   "summary": "文章摘要...",
   "category": "Breaking News",
   "importance_score": 8,
+  "ai_relevance_score": 9,
   "insight": "關鍵洞察..."
 }"""
 
@@ -227,6 +234,7 @@ class LLMAnalyzer:
                 summary=analysis_data["summary"][:150],  # Enforce max length
                 category=analysis_data["category"],
                 importance_score=min(10, max(0, analysis_data["importance_score"])),
+                ai_relevance_score=min(10, max(0, analysis_data.get("ai_relevance_score", 10))),
                 insight=analysis_data["insight"][:100],  # Enforce max length
             )
 
@@ -271,10 +279,14 @@ class LLMAnalyzer:
             data = json.loads(text)
 
             # Validate required fields
-            required_fields = ["title_cn", "summary", "category", "importance_score", "insight"]
+            required_fields = ["title_cn", "summary", "category", "importance_score", "ai_relevance_score", "insight"]
             for field in required_fields:
                 if field not in data:
-                    raise ValueError(f"Missing required field: {field}")
+                    # Provide default for ai_relevance_score if missing (backward compatibility)
+                    if field == "ai_relevance_score":
+                        data["ai_relevance_score"] = 10
+                    else:
+                        raise ValueError(f"Missing required field: {field}")
 
             # Validate category
             valid_categories = ["Breaking News", "Research", "Tools/Products", "Business", "Tutorial"]
