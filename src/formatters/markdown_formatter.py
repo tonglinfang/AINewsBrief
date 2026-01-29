@@ -32,24 +32,22 @@ class MarkdownFormatter:
     TEMPLATE = """📰 AI快訊 {{ date }}
 ━━━━━━━━━━━━━━━━━━━━━
 📊 今日共 {{ total_articles }} 則新聞
+{% set ns = namespace(num=1) %}
 {% for category, articles in articles_by_category.items() %}
 {% if articles %}
-━━━━━━━━━━━━━━━━━━━━━
-{{ category_emoji[category] }} {{ category_names[category] }}（{{ articles|length }}）
-{% for analysis in articles %}
 
-▸ {{ analysis.title_cn }}
-  {{ analysis.summary }}
-  💡 {{ analysis.insight }}
-  📰 {{ analysis.article.source }} {{ importance_stars(analysis.importance_score) }}
-  🔗 [閱讀原文]({{ analysis.article.url }})
+{{ category_emoji[category] }} {{ category_names[category] }}
+{% for analysis in articles %}
+{{ ns.num }}. {{ analysis.title_cn }} {{ importance_stars(analysis.importance_score) }}
+┃ {{ analysis.summary }}
+┃ 💡 {{ analysis.insight }}
+┃ {{ analysis.article.source }} · [閱讀原文]({{ analysis.article.url }})
+{% set ns.num = ns.num + 1 %}
 {% endfor %}
 {% endif %}
 {% endfor %}
-
 ━━━━━━━━━━━━━━━━━━━━━
-來源：AINewsBrief
-Powered by {{ llm_provider|capitalize }} {{ llm_model }}
+來源：AINewsBrief · Powered by {{ llm_provider|capitalize }} {{ llm_model }}
 """
 
     def __init__(self):
