@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # GitHub API (optional, for higher rate limits)
     github_token: str = Field(default="", description="GitHub personal access token")
 
+    # YouTube API (optional)
+    youtube_api_key: str = Field(default="", description="YouTube Data API v3 key")
+
     # Logging Configuration
     log_level: str = Field(default="INFO", description="Log level (DEBUG, INFO, WARNING, ERROR)")
     log_format: str = Field(default="console", description="Log format (console, json)")
@@ -74,6 +77,8 @@ class Settings(BaseSettings):
     enable_arxiv: bool = Field(default=True, description="Enable ArXiv fetching")
     enable_blogs: bool = Field(default=True, description="Enable official blog fetching")
     enable_github: bool = Field(default=True, description="Enable GitHub releases fetching")
+    enable_x: bool = Field(default=True, description="Enable X (Twitter) fetching")
+    enable_youtube: bool = Field(default=True, description="Enable YouTube fetching")
 
     # Deduplication history
     dedup_history_path: str = Field(

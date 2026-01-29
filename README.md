@@ -4,8 +4,10 @@
 
 ## ✨ 特性
 
-- **多源抓取**: RSS (TechCrunch, MIT Tech Review 等)、Reddit、HackerNews、ArXiv
-- **智能分析**: 使用 Claude Sonnet 4.5 進行摘要、分類和重要性評分
+- **多源抓取**: RSS (TechCrunch, MIT Tech Review 等)、Reddit、HackerNews、ArXiv、AI 公司官方博客、GitHub Releases、**X (Twitter)**、**YouTube**
+- **智能分析**: 使用 Claude Sonnet 4.5 / GPT-4 / Gemini 進行摘要、分類和重要性評分
+- **社交媒體監控**: 追蹤 AI 領域意見領袖和公司的 X (Twitter) 動態
+- **視頻內容**: 監控頂級 AI YouTube 頻道的最新視頻
 - **自動發送**: 每日自動生成 Markdown 簡報並發送到 Telegram
 - **GitHub Actions**: 無需服務器，使用 GitHub Actions 自動化執行
 - **版本控制**: 所有簡報自動保存到 repository

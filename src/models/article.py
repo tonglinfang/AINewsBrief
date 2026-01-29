@@ -14,6 +14,7 @@ class Article(BaseModel):
     published_at: datetime = Field(..., description="Publication timestamp")
     content: str = Field(..., description="Article content or summary")
     tags: List[str] = Field(default_factory=list, description="Article tags/keywords")
+    priority: int = Field(default=5, ge=0, le=10, description="Source priority (0-10)")
 
     def __hash__(self):
         """Make Article hashable for deduplication."""

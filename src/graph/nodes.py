@@ -12,6 +12,8 @@ from src.tools.api_fetcher import RedditFetcher, HackerNewsFetcher
 from src.tools.arxiv_fetcher import ArxivFetcher
 from src.tools.blog_fetcher import BlogFetcher
 from src.tools.github_fetcher import GitHubFetcher
+from src.tools.x_fetcher import XFetcher
+from src.tools.youtube_fetcher import YouTubeFetcher
 from src.tools.telegram_sender import TelegramSender
 from src.analyzers.llm_analyzer import LLMAnalyzer
 from src.formatters.markdown_formatter import MarkdownFormatter
@@ -47,6 +49,8 @@ async def fetch_news_node(state: BriefState) -> BriefState:
         ("ArXiv", settings.enable_arxiv, ArxivFetcher),
         ("Official Blogs", settings.enable_blogs, BlogFetcher),
         ("GitHub Releases", settings.enable_github, GitHubFetcher),
+        ("X (Twitter)", settings.enable_x, XFetcher),
+        ("YouTube", settings.enable_youtube, YouTubeFetcher),
     ]
 
     # Initialize enabled fetchers
