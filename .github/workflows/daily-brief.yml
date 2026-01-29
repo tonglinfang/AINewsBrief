@@ -108,6 +108,9 @@ jobs:
           # Optional: GitHub Token for higher rate limits
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+          # Optional: YouTube API Key
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
           # Data source toggles
           ENABLE_RSS: 'true'
           ENABLE_REDDIT: 'true'
@@ -115,6 +118,8 @@ jobs:
           ENABLE_ARXIV: 'true'
           ENABLE_BLOGS: 'true'
           ENABLE_GITHUB: 'true'
+          ENABLE_X: 'true'
+          ENABLE_YOUTUBE: 'true'
 
           # Logging
           LOG_LEVEL: ${{ github.event.inputs.log_level || 'INFO' }}

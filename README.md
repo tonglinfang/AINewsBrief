@@ -126,6 +126,8 @@ python -m src.agent
 
 ## ⚙️ GitHub Actions 設置
 
+> 🚀 **快速啟動**：查看 [docs/QUICK_START_ACTIONS.md](docs/QUICK_START_ACTIONS.md) 獲取 2 分鐘快速配置指南（包含 X & YouTube）
+
 ### 1. 配置 Secrets
 
 在 GitHub repository 中設置以下 secrets（Settings → Secrets and variables → Actions → New repository secret）：
@@ -140,14 +142,20 @@ python -m src.agent
 - `TELEGRAM_BOT_TOKEN`: Telegram bot token
 - `TELEGRAM_CHAT_ID`: Telegram chat ID
 
-**可選**:
+**可選（新功能）**:
+- `YOUTUBE_API_KEY`: YouTube Data API v3 密鑰（啟用 YouTube 視頻抓取）✨
 - `REDDIT_CLIENT_ID`: Reddit API client ID（如果需要 Reddit 數據）
 - `REDDIT_CLIENT_SECRET`: Reddit API client secret（如果需要 Reddit 數據）
+
+> 📖 **詳細配置指南**：[docs/GITHUB_ACTIONS_SETUP.md](docs/GITHUB_ACTIONS_SETUP.md)
+> 📖 **X & YouTube 設置**：[docs/X_YOUTUBE_SETUP.md](docs/X_YOUTUBE_SETUP.md)
 
 ### 2. 啟用 GitHub Actions
 
 1. 確保 repository 的 Actions 已啟用（Settings → Actions → General → Allow all actions）
 2. 確保 workflow 有寫權限（Settings → Actions → General → Workflow permissions → Read and write permissions）
+3. X (Twitter) 無需 API key，開箱即用 🎉
+4. YouTube 需要 API key（可選，不配置也能運行其他數據源）
 
 ### 3. 手動觸發測試
 
