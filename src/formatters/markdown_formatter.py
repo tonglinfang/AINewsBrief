@@ -30,7 +30,7 @@ class MarkdownFormatter:
     }
 
     TEMPLATE = """📰 AI快訊 {{ date }}
-━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━
 📊 今日共 {{ total_articles }} 則新聞
 {% set ns = namespace(num=1) %}
 {% for category, articles in articles_by_category.items() %}
@@ -46,7 +46,7 @@ class MarkdownFormatter:
 {% endfor %}
 {% endif %}
 {% endfor %}
-━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━
 來源：AINewsBrief · Powered by {{ llm_provider|capitalize }} {{ llm_model }}
 """
 
