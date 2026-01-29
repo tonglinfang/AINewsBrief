@@ -5,7 +5,8 @@
 ## ✨ 特性
 
 - **多源抓取**: RSS (TechCrunch, MIT Tech Review 等)、Reddit、HackerNews、ArXiv、AI 公司官方博客、GitHub Releases、**X (Twitter)**、**YouTube**
-- **智能分析**: 使用 Claude Sonnet 4.5 / GPT-4 / Gemini 進行摘要、分類和重要性評分
+- **智能分析**: 使用 Claude Sonnet 4.5 / GPT-4 / Gemini / GLM 進行摘要、分類和雙重評分（重要性 + AI 相關性）
+- **雙重評分體系**: 同時評估內容重要性（0-10）和 AI 相關性（0-10），確保高質量和高相關性
 - **社交媒體監控**: 追蹤 AI 領域意見領袖和公司的 X (Twitter) 動態
 - **視頻內容**: 監控頂級 AI YouTube 頻道的最新視頻
 - **自動發送**: 每日自動生成 Markdown 簡報並發送到 Telegram
@@ -31,6 +32,32 @@
 3. **Analyze**: Claude 批量分析文章（摘要、分類、評分、洞察）
 4. **Format**: 生成結構化 Markdown 簡報
 5. **Send**: 發送到 Telegram 並保存到文件
+
+## 📊 雙重評分體系
+
+系統採用兩個獨立的評分維度來確保內容質量：
+
+### 1. **重要性評分** (Importance Score: 0-10)
+評估內容本身的重要程度：
+- **9-10分**: 行業突破性進展（如 GPT-5 發布、重大技術突破）
+- **7-8分**: 重要新聞或重大研究成果
+- **5-6分**: 有價值的更新和進展
+- **0-4分**: 一般性內容或次要信息
+
+### 2. **AI 相關性評分** (AI Relevance Score: 0-10)
+評估內容與 AI 領域的相關程度：
+- **9-10分**: AI 核心技術（新模型架構、訓練方法、LLM、神經網絡）
+- **7-8分**: AI 工具/平台/框架（PyTorch、TensorFlow 等）
+- **5-6分**: AI 產業動態（融資、政策、市場趨勢）
+- **3-4分**: AI 應用案例（醫療、金融等領域應用）
+- **0-2分**: 與 AI 幾乎無關
+
+### 過濾策略
+只有**同時滿足**兩個條件的文章才會被包含在簡報中：
+- 重要性評分 ≥ 5 分（默認，可配置）
+- AI 相關性評分 ≥ 5 分（默認，可配置）
+
+這種雙重過濾機制確保推送的內容既**重要**又**相關**，有效過濾掉低質量和非 AI 相關的內容。
 
 ## 🚀 快速開始
 
@@ -90,6 +117,7 @@ TELEGRAM_CHAT_ID=123456789
 - **Anthropic Claude** (推薦): 最強推理能力，優秀中文支持
 - **OpenAI GPT**: 成熟穩定，多模型選擇
 - **Google Gemini**: 快速免費，慷慨額度
+- **智谱 AI (GLM)**: 國產大模型，中文優化
 
 詳細配置指南: [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md)
 
@@ -213,9 +241,15 @@ Workflow 會在每天 UTC 00:00（北京時間 08:00）自動運行。
 ```env
 # 文章數量控制
 MAX_TOTAL_ARTICLES=50          # 最多處理的文章數
-MIN_IMPORTANCE_SCORE=5         # 最低重要性評分（0-10）
 MAX_ARTICLES_PER_SOURCE=20     # 每個來源最多抓取的文章數
 ARTICLE_AGE_HOURS=24           # 只抓取最近 N 小時的文章
+
+# 評分過濾（雙重評分體系）
+MIN_IMPORTANCE_SCORE=5         # 最低重要性評分（0-10）
+MIN_AI_RELEVANCE_SCORE=5       # 最低 AI 相關性評分（0-10）
+
+# 去重設置
+DEDUP_HISTORY_DAYS=30          # 去重歷史記憶天數（1-365）
 
 # Data source toggles
 ENABLE_RSS=true                # RSS feeds
@@ -224,8 +258,11 @@ ENABLE_HACKERNEWS=true         # HackerNews
 ENABLE_ARXIV=true              # ArXiv
 ENABLE_BLOGS=true              # Official blogs
 ENABLE_GITHUB=true             # GitHub releases
+ENABLE_X=true                  # X (Twitter)
+ENABLE_YOUTUBE=true            # YouTube
 
 # LLM 設置
+LLM_PROVIDER=anthropic         # anthropic/openai/google/zhipu
 LLM_MODEL=claude-sonnet-4-5-20250929
 LLM_TEMPERATURE=0.3
 LLM_MAX_TOKENS=4096
@@ -246,11 +283,16 @@ TIMEZONE=Asia/Shanghai
 - 📚 Tutorial（教程文章）
 
 每篇文章包含：
-- ⭐ 重要性評分（0-10）
+- ⭐ 重要性星級評分（9+分=5星、7+分=4星、5+分=3星、3+分=2星、其他=1星）
 - 標題和來源
-- AI 生成的摘要
-- 關鍵洞察
+- AI 生成的摘要（基於原文內容）
+- 💡 關鍵洞察（提煉核心價值）
 - 原文鏈接
+
+**評分維度**：
+- **重要性評分**（0-10）：內容本身的重要程度
+- **AI 相關性評分**（0-10）：與 AI 領域的相關程度
+- 只有雙重評分同時 ≥ 5 分的文章才會被包含
 
 ## 🧪 測試
 
