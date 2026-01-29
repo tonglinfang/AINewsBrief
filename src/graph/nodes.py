@@ -39,32 +39,23 @@ async def fetch_news_node(state: BriefState) -> BriefState:
     """
     logger.info("fetch_node_start")
 
+    # Define available sources with their settings flags and fetcher factories
+    source_configs = [
+        ("RSS Feeds", settings.enable_rss, RSSFetcher),
+        ("Reddit", settings.enable_reddit, RedditFetcher),
+        ("HackerNews", settings.enable_hackernews, HackerNewsFetcher),
+        ("ArXiv", settings.enable_arxiv, ArxivFetcher),
+        ("Official Blogs", settings.enable_blogs, BlogFetcher),
+        ("GitHub Releases", settings.enable_github, GitHubFetcher),
+    ]
+
     # Initialize enabled fetchers
     fetchers = []
-    if settings.enable_rss:
-        fetchers.append(("RSS Feeds", RSSFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="RSS Feeds")
-    if settings.enable_reddit:
-        fetchers.append(("Reddit", RedditFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="Reddit")
-    if settings.enable_hackernews:
-        fetchers.append(("HackerNews", HackerNewsFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="HackerNews")
-    if settings.enable_arxiv:
-        fetchers.append(("ArXiv", ArxivFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="ArXiv")
-    if settings.enable_blogs:
-        fetchers.append(("Official Blogs", BlogFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="Official Blogs")
-    if settings.enable_github:
-        fetchers.append(("GitHub Releases", GitHubFetcher().fetch_all()))
-    else:
-        logger.info("source_disabled", source="GitHub Releases")
+    for source_name, is_enabled, fetcher_class in source_configs:
+        if is_enabled:
+            fetchers.append((source_name, fetcher_class().fetch_all()))
+        else:
+            logger.info("source_disabled", source=source_name)
 
     # Fetch concurrently
     if fetchers:
@@ -242,13 +233,11 @@ async def format_node(state: BriefState) -> BriefState:
 
     logger.info("format_node_start", article_count=len(analyzed_articles))
 
-    formatter = MarkdownFormatter()
-
     if not analyzed_articles:
         logger.warning("no_articles_to_format")
-        report = formatter.format(date, [])
-    else:
-        report = formatter.format(date, analyzed_articles)
+
+    formatter = MarkdownFormatter()
+    report = formatter.format(date, analyzed_articles)
 
     logger.info(
         "format_node_complete",

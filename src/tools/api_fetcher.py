@@ -1,6 +1,7 @@
 """API-based fetchers for Reddit and HackerNews with improved content extraction."""
 
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import aiohttp
@@ -324,7 +325,6 @@ class HackerNewsFetcher:
                     text = ""
 
             # Clean up whitespace
-            import re
             text = re.sub(r"\s+", " ", text).strip()
 
             return text[:2000]

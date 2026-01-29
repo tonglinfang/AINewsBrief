@@ -66,16 +66,9 @@ Powered by {{ llm_provider|capitalize }} {{ llm_model }}
         Returns:
             Star rating string (e.g., "⭐⭐⭐" for score 6-7)
         """
-        if score >= 9:
-            return "⭐⭐⭐⭐⭐"
-        elif score >= 7:
-            return "⭐⭐⭐⭐"
-        elif score >= 5:
-            return "⭐⭐⭐"
-        elif score >= 3:
-            return "⭐⭐"
-        else:
-            return "⭐"
+        # Score thresholds: 9+ = 5 stars, 7+ = 4 stars, 5+ = 3 stars, 3+ = 2 stars, else 1 star
+        star_count = 5 if score >= 9 else 4 if score >= 7 else 3 if score >= 5 else 2 if score >= 3 else 1
+        return "⭐" * star_count
 
     def format(self, date: datetime, analyzed_articles: List[AnalysisResult]) -> DailyReport:
         """Format analyzed articles into a daily report.
@@ -159,16 +152,14 @@ Powered by {{ llm_provider|capitalize }} {{ llm_model }}
             dt = dt.replace(tzinfo=None)
 
         delta = now - dt
-
-        if delta.days > 0:
-            return f"{delta.days}天前"
-
+        days = delta.days
         hours = delta.seconds // 3600
+        minutes = delta.seconds // 60
+
+        if days > 0:
+            return f"{days}天前"
         if hours > 0:
             return f"{hours}小時前"
-
-        minutes = delta.seconds // 60
         if minutes > 0:
             return f"{minutes}分鐘前"
-
         return "剛剛"

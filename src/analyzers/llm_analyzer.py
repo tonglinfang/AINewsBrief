@@ -14,6 +14,52 @@ from src.utils.logger import get_logger
 logger = get_logger("llm_analyzer")
 
 
+def _get_provider_config(provider: str) -> dict:
+    """Get provider-specific configuration.
+
+    Args:
+        provider: LLM provider name
+
+    Returns:
+        Dict with api_key_attr, api_key_name, module, class_name, and extra_kwargs
+    """
+    configs = {
+        "anthropic": {
+            "api_key_attr": "anthropic_api_key",
+            "api_key_name": "ANTHROPIC_API_KEY",
+            "module": "langchain_anthropic",
+            "class_name": "ChatAnthropic",
+            "api_key_param": "api_key",
+            "max_tokens_param": "max_tokens",
+        },
+        "openai": {
+            "api_key_attr": "openai_api_key",
+            "api_key_name": "OPENAI_API_KEY",
+            "module": "langchain_openai",
+            "class_name": "ChatOpenAI",
+            "api_key_param": "api_key",
+            "max_tokens_param": "max_tokens",
+        },
+        "google": {
+            "api_key_attr": "google_api_key",
+            "api_key_name": "GOOGLE_API_KEY",
+            "module": "langchain_google_genai",
+            "class_name": "ChatGoogleGenerativeAI",
+            "api_key_param": "google_api_key",
+            "max_tokens_param": "max_output_tokens",
+        },
+        "zhipu": {
+            "api_key_attr": "zhipu_api_key",
+            "api_key_name": "ZHIPU_API_KEY",
+            "module": "langchain_community.chat_models",
+            "class_name": "ChatZhipuAI",
+            "api_key_param": "api_key",
+            "max_tokens_param": "max_tokens",
+        },
+    }
+    return configs.get(provider)
+
+
 def create_llm() -> BaseChatModel:
     """Create LLM instance based on configured provider.
 
@@ -24,64 +70,32 @@ def create_llm() -> BaseChatModel:
         ValueError: If provider is not supported or API key is missing
     """
     provider = settings.llm_provider
+    config = _get_provider_config(provider)
 
-    if provider == "anthropic":
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY is required for Anthropic provider")
-
-        from langchain_anthropic import ChatAnthropic
-
-        return ChatAnthropic(
-            model=settings.llm_model,
-            api_key=settings.anthropic_api_key,
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-        )
-
-    elif provider == "openai":
-        if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required for OpenAI provider")
-
-        from langchain_openai import ChatOpenAI
-
-        return ChatOpenAI(
-            model=settings.llm_model,
-            api_key=settings.openai_api_key,
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-        )
-
-    elif provider == "google":
-        if not settings.google_api_key:
-            raise ValueError("GOOGLE_API_KEY is required for Google provider")
-
-        from langchain_google_genai import ChatGoogleGenerativeAI
-
-        return ChatGoogleGenerativeAI(
-            model=settings.llm_model,
-            google_api_key=settings.google_api_key,
-            temperature=settings.llm_temperature,
-            max_output_tokens=settings.llm_max_tokens,
-        )
-
-    elif provider == "zhipu":
-        if not settings.zhipu_api_key:
-            raise ValueError("ZHIPU_API_KEY is required for Zhipu AI provider")
-
-        from langchain_community.chat_models import ChatZhipuAI
-
-        return ChatZhipuAI(
-            model=settings.llm_model,
-            api_key=settings.zhipu_api_key,
-            temperature=settings.llm_temperature,
-            max_tokens=settings.llm_max_tokens,
-        )
-
-    else:
+    if not config:
         raise ValueError(
             f"Unsupported LLM provider: {provider}. "
             f"Supported providers: anthropic, openai, google, zhipu"
         )
+
+    api_key = getattr(settings, config["api_key_attr"])
+    if not api_key:
+        raise ValueError(f"{config['api_key_name']} is required for {provider.capitalize()} provider")
+
+    # Dynamic import
+    import importlib
+    module = importlib.import_module(config["module"])
+    llm_class = getattr(module, config["class_name"])
+
+    # Build kwargs with provider-specific parameter names
+    kwargs = {
+        "model": settings.llm_model,
+        config["api_key_param"]: api_key,
+        "temperature": settings.llm_temperature,
+        config["max_tokens_param"]: settings.llm_max_tokens,
+    }
+
+    return llm_class(**kwargs)
 
 
 class LLMAnalyzer:

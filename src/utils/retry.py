@@ -1,6 +1,7 @@
 """Retry utilities with exponential backoff."""
 
 import asyncio
+import time
 from functools import wraps
 from typing import Any, Callable, Optional, Tuple, Type, TypeVar
 
@@ -210,8 +211,6 @@ class CircuitBreaker:
         """Check if enough time has passed to attempt reset."""
         if self.last_failure_time is None:
             return True
-        import time
-
         return (time.time() - self.last_failure_time) >= self.recovery_timeout
 
     def _on_success(self) -> None:
@@ -223,8 +222,6 @@ class CircuitBreaker:
 
     def _on_failure(self) -> None:
         """Handle failed call."""
-        import time
-
         self.failures += 1
         self.last_failure_time = time.time()
 

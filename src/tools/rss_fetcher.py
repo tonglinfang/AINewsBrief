@@ -9,6 +9,7 @@ from src.models.article import Article
 from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.retry import async_retry
+from src.utils.feed_utils import extract_feed_content, parse_feed_date
 
 logger = get_logger("rss_fetcher")
 
@@ -88,12 +89,12 @@ class RSSFetcher:
             for entry in feed.entries[: self.max_per_source]:
                 try:
                     # Parse published date
-                    published_at = self._parse_date(entry)
+                    published_at = parse_feed_date(entry)
                     if published_at < cutoff_time:
                         continue
 
                     # Extract content
-                    entry_content = self._extract_content(entry)
+                    entry_content = extract_feed_content(entry)
                     if not entry_content or len(entry_content) < 100:
                         continue
 
@@ -120,34 +121,6 @@ class RSSFetcher:
         except Exception as e:
             logger.warning("rss_feed_error", source=source_name, error=str(e))
             return []
-
-    def _parse_date(self, entry: dict) -> datetime:
-        """Parse publication date from feed entry."""
-        import email.utils
-
-        date_str = entry.get("published", entry.get("updated", ""))
-        if date_str:
-            parsed = email.utils.parsedate_to_datetime(date_str)
-            if parsed:
-                if parsed.tzinfo is None:
-                    return parsed.replace(tzinfo=timezone.utc)
-                return parsed.astimezone(timezone.utc)
-
-        return datetime.now(timezone.utc)
-
-    def _extract_content(self, entry: dict) -> str:
-        """Extract content from feed entry."""
-        # Try different content fields
-        if hasattr(entry, "content") and entry.content:
-            return entry.content[0].get("value", "")
-
-        if hasattr(entry, "summary"):
-            return entry.summary
-
-        if hasattr(entry, "description"):
-            return entry.description
-
-        return ""
 
     def _extract_tags(self, entry: dict) -> List[str]:
         """Extract tags from feed entry."""

@@ -1,6 +1,7 @@
 """Fetcher for GitHub releases from major AI repositories."""
 
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import aiohttp
@@ -187,31 +188,34 @@ class GitHubFetcher:
             Formatted content string
         """
         parts = []
-
-        # Add key metrics
         tag = release.get("tag_name", "")
+
         if tag:
             parts.append(f"Version: {tag}")
+            # Check if it's a major release (version >= 1.0.0)
+            if self._is_major_release(tag):
+                parts.append("Major release")
 
-        # Check if it's a major/minor/patch release
-        if tag:
-            if tag.count(".") >= 1:
-                version_parts = tag.lstrip("v").split(".")
-                if len(version_parts) >= 1:
-                    try:
-                        major = int(version_parts[0])
-                        if major >= 1:
-                            parts.append("Major release")
-                    except ValueError:
-                        pass
-
-        # Add body content, cleaned up
         if body:
-            # Remove HTML comments
-            import re
-            cleaned = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
-            # Limit length
-            cleaned = cleaned[:2500]
+            # Remove HTML comments and limit length
+            cleaned = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)[:2500]
             parts.append(cleaned)
 
         return "\n\n".join(parts)
+
+    def _is_major_release(self, tag: str) -> bool:
+        """Check if a tag represents a major release (version >= 1.0.0).
+
+        Args:
+            tag: Version tag string (e.g., "v1.0.0", "2.3.1")
+
+        Returns:
+            True if major version is >= 1
+        """
+        if "." not in tag:
+            return False
+        try:
+            major = int(tag.lstrip("v").split(".")[0])
+            return major >= 1
+        except (ValueError, IndexError):
+            return False

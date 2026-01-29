@@ -10,6 +10,7 @@ from src.models.article import Article
 from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.retry import async_retry, RETRYABLE_EXCEPTIONS
+from src.utils.feed_utils import extract_feed_content, parse_feed_date
 
 logger = get_logger("blog_fetcher")
 
@@ -129,11 +130,11 @@ class BlogFetcher:
 
         for entry in feed.entries[: self.max_per_source]:
             try:
-                published_at = self._parse_feed_date(entry)
+                published_at = parse_feed_date(entry)
                 if published_at < cutoff_time:
                     continue
 
-                content = self._extract_feed_content(entry)
+                content = extract_feed_content(entry)
                 if not content or len(content) < 50:
                     content = entry.get("title", "") + ". " + entry.get("summary", "")
 
@@ -234,32 +235,6 @@ class BlogFetcher:
 
         return articles
 
-    def _parse_feed_date(self, entry: dict) -> datetime:
-        """Parse date from feed entry."""
-        import email.utils
-
-        date_str = entry.get("published", entry.get("updated", ""))
-        if date_str:
-            try:
-                parsed = email.utils.parsedate_to_datetime(date_str)
-                if parsed.tzinfo is None:
-                    return parsed.replace(tzinfo=timezone.utc)
-                return parsed.astimezone(timezone.utc)
-            except Exception:
-                pass
-
-        # Try struct_time format
-        for field in ["published_parsed", "updated_parsed"]:
-            if hasattr(entry, field) and getattr(entry, field):
-                import time
-                try:
-                    ts = time.mktime(getattr(entry, field))
-                    return datetime.fromtimestamp(ts, tz=timezone.utc)
-                except Exception:
-                    pass
-
-        return datetime.now(timezone.utc)
-
     def _parse_web_date(self, date_str: str) -> datetime:
         """Parse date from web page element."""
         from dateutil import parser as date_parser
@@ -272,15 +247,3 @@ class BlogFetcher:
         except Exception:
             return datetime.now(timezone.utc)
 
-    def _extract_feed_content(self, entry: dict) -> str:
-        """Extract content from feed entry."""
-        if hasattr(entry, "content") and entry.content:
-            return entry.content[0].get("value", "")
-
-        if hasattr(entry, "summary"):
-            return entry.summary
-
-        if hasattr(entry, "description"):
-            return entry.description
-
-        return ""
