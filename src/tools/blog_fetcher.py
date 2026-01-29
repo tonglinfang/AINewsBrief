@@ -130,7 +130,15 @@ class BlogFetcher:
 
         for entry in feed.entries[: self.max_per_source]:
             try:
+                # Skip entries without valid date
                 published_at = parse_feed_date(entry)
+                if published_at is None:
+                    logger.debug(
+                        "blog_entry_no_date",
+                        source=source_name,
+                        title=entry.get("title", "")[:50],
+                    )
+                    continue
                 if published_at < cutoff_time:
                     continue
 
@@ -204,13 +212,27 @@ class BlogFetcher:
                 else:
                     continue
 
-                # Extract date
-                date_el = element.select_one("time, .date, [class*='date']")
+                # Extract date - skip if no date found (avoid including old articles)
+                date_el = element.select_one("time, .date, [class*='date'], [class*='Date']")
                 if date_el:
                     date_str = date_el.get("datetime") or date_el.get_text(strip=True)
                     published_at = self._parse_web_date(date_str)
                 else:
-                    published_at = datetime.now(timezone.utc)
+                    # No date element found - skip this article to avoid old content
+                    logger.debug(
+                        "blog_web_no_date",
+                        source=source_name,
+                        title=title[:50],
+                    )
+                    continue
+
+                if published_at is None:
+                    logger.debug(
+                        "blog_web_date_parse_failed",
+                        source=source_name,
+                        title=title[:50],
+                    )
+                    continue
 
                 if published_at < cutoff_time:
                     continue
@@ -235,8 +257,12 @@ class BlogFetcher:
 
         return articles
 
-    def _parse_web_date(self, date_str: str) -> datetime:
-        """Parse date from web page element."""
+    def _parse_web_date(self, date_str: str) -> Optional[datetime]:
+        """Parse date from web page element.
+
+        Returns:
+            Parsed datetime or None if parsing fails
+        """
         from dateutil import parser as date_parser
 
         try:
@@ -245,5 +271,5 @@ class BlogFetcher:
                 return parsed.replace(tzinfo=timezone.utc)
             return parsed.astimezone(timezone.utc)
         except Exception:
-            return datetime.now(timezone.utc)
+            return None
 

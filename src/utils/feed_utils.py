@@ -28,21 +28,18 @@ def extract_feed_content(entry: dict) -> str:
     return ""
 
 
-def parse_feed_date(entry: dict, default: Optional[datetime] = None) -> datetime:
+def parse_feed_date(entry: dict, default: Optional[datetime] = None) -> Optional[datetime]:
     """Parse publication date from a feed entry.
 
-    Tries standard date fields and falls back to current time.
+    Tries standard date fields and returns None if parsing fails.
 
     Args:
         entry: Feed entry dictionary
-        default: Default datetime if parsing fails (defaults to now)
+        default: Default datetime if parsing fails (defaults to None)
 
     Returns:
-        Parsed datetime with UTC timezone
+        Parsed datetime with UTC timezone, or None if parsing fails
     """
-    if default is None:
-        default = datetime.now(timezone.utc)
-
     # Try standard date string fields
     date_str = entry.get("published", entry.get("updated", ""))
     if date_str:
