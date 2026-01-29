@@ -29,23 +29,53 @@ class MarkdownFormatter:
         "Tutorial": "技術教程",
     }
 
-    TEMPLATE = """AI快訊 {{ date }}
-
+    TEMPLATE = """📰 AI快訊 {{ date }}
+━━━━━━━━━━━━━━━━━━━━━
+📊 今日共 {{ total_articles }} 則新聞
 {% for category, articles in articles_by_category.items() %}
 {% if articles %}
-## {{ category_emoji[category] }} {{ category_names[category] }}
+━━━━━━━━━━━━━━━━━━━━━
+{{ category_emoji[category] }} {{ category_names[category] }}（{{ articles|length }}）
 {% for analysis in articles %}
-• {{ analysis.title_cn }}｜{{ analysis.summary }}（原文：{{ analysis.article.url }} ）
+
+▸ {{ analysis.title_cn }}
+  {{ analysis.summary }}
+  💡 {{ analysis.insight }}
+  📰 {{ analysis.article.source }} {{ importance_stars(analysis.importance_score) }}
+  🔗 {{ analysis.article.url }}
 {% endfor %}
 {% endif %}
 {% endfor %}
 
-來源：AINewsBrief｜Powered by {{ llm_provider|capitalize }} {{ llm_model }}
+━━━━━━━━━━━━━━━━━━━━━
+來源：AINewsBrief
+Powered by {{ llm_provider|capitalize }} {{ llm_model }}
 """
 
     def __init__(self):
         """Initialize markdown formatter."""
         self.template = Template(self.TEMPLATE)
+
+    @staticmethod
+    def _importance_stars(score: int) -> str:
+        """Convert importance score to star rating.
+
+        Args:
+            score: Importance score (0-10)
+
+        Returns:
+            Star rating string (e.g., "⭐⭐⭐" for score 6-7)
+        """
+        if score >= 9:
+            return "⭐⭐⭐⭐⭐"
+        elif score >= 7:
+            return "⭐⭐⭐⭐"
+        elif score >= 5:
+            return "⭐⭐⭐"
+        elif score >= 3:
+            return "⭐⭐"
+        else:
+            return "⭐"
 
     def format(self, date: datetime, analyzed_articles: List[AnalysisResult]) -> DailyReport:
         """Format analyzed articles into a daily report.
@@ -77,6 +107,7 @@ class MarkdownFormatter:
             category_emoji=self.CATEGORY_EMOJIS,
             category_names=self.CATEGORY_NAMES_CN,
             format_time=self._format_relative_time,
+            importance_stars=self._importance_stars,
             generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,
