@@ -35,7 +35,7 @@ class MarkdownFormatter:
 {% if articles %}
 ## {{ category_emoji[category] }} {{ category_names[category] }}
 {% for analysis in articles %}
-• {{ analysis.title_cn }}｜{{ analysis.summary }}（原文：{{ analysis.article.url }}）
+• {{ analysis.title_cn }}｜{{ analysis.summary }}（原文：{{ analysis.article.url }} ）
 {% endfor %}
 {% endif %}
 {% endfor %}
