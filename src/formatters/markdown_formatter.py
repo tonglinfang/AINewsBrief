@@ -42,7 +42,7 @@ class MarkdownFormatter:
   {{ analysis.summary }}
   💡 {{ analysis.insight }}
   📰 {{ analysis.article.source }} {{ importance_stars(analysis.importance_score) }}
-  🔗 {{ analysis.article.url }}
+  🔗 [閱讀原文]({{ analysis.article.url }})
 {% endfor %}
 {% endif %}
 {% endfor %}
