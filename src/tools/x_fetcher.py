@@ -154,13 +154,18 @@ class XFetcher:
 
             for entry in feed.entries[: self.max_per_account]:
                 try:
-                    # Parse published date
+                    # Parse published date - skip if no valid date
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
                         published_at = datetime(
                             *entry.published_parsed[:6], tzinfo=timezone.utc
                         )
                     else:
-                        published_at = datetime.now(timezone.utc)
+                        # No date - skip to avoid old content
+                        logger.debug(
+                            "x_entry_no_date",
+                            username=username,
+                        )
+                        continue
 
                     if published_at < cutoff_time:
                         continue

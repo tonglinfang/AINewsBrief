@@ -88,8 +88,15 @@ class RSSFetcher:
 
             for entry in feed.entries[: self.max_per_source]:
                 try:
-                    # Parse published date
+                    # Parse published date - skip if date cannot be parsed
                     published_at = parse_feed_date(entry)
+                    if published_at is None:
+                        logger.debug(
+                            "rss_entry_no_date",
+                            source=source_name,
+                            title=entry.get("title", "")[:50],
+                        )
+                        continue
                     if published_at < cutoff_time:
                         continue
 
