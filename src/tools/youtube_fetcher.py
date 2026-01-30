@@ -107,11 +107,13 @@ class YouTubeFetcher:
             return []
 
         logger.info("fetching_youtube_videos", channels=len(self.CHANNELS))
-        tasks = [
-            self.fetch_channel(channel_id, info)
-            for channel_id, info in self.CHANNELS.items()
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            tasks = [
+                self.fetch_channel(session, channel_id, info)
+                for channel_id, info in self.CHANNELS.items()
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
         for channel_id, result in zip(self.CHANNELS.keys(), results):
@@ -129,11 +131,12 @@ class YouTubeFetcher:
 
     @async_retry(max_attempts=3, min_wait=1.0, max_wait=10.0)
     async def fetch_channel(
-        self, channel_id: str, channel_info: dict
+        self, session: aiohttp.ClientSession, channel_id: str, channel_info: dict
     ) -> List[Article]:
         """Fetch recent videos from a YouTube channel.
 
         Args:
+            session: aiohttp session
             channel_id: YouTube channel ID
             channel_info: Channel metadata (name, priority)
 
@@ -142,19 +145,19 @@ class YouTubeFetcher:
         """
         try:
             # Step 1: Get channel's upload playlist ID
-            uploads_playlist_id = await self._get_uploads_playlist(channel_id)
+            uploads_playlist_id = await self._get_uploads_playlist(session, channel_id)
             if not uploads_playlist_id:
                 return []
 
             # Step 2: Get recent videos from playlist
-            videos = await self._get_playlist_videos(uploads_playlist_id)
+            videos = await self._get_playlist_videos(session, uploads_playlist_id)
 
             # Step 3: Get video details
             if not videos:
                 return []
 
             video_ids = [v["videoId"] for v in videos[: self.max_per_channel]]
-            video_details = await self._get_video_details(video_ids)
+            video_details = await self._get_video_details(session, video_ids)
 
             # Step 4: Convert to Article objects
             articles = []
@@ -204,10 +207,11 @@ class YouTubeFetcher:
             )
             return []
 
-    async def _get_uploads_playlist(self, channel_id: str) -> str:
+    async def _get_uploads_playlist(self, session: aiohttp.ClientSession, channel_id: str) -> str:
         """Get the uploads playlist ID for a channel.
 
         Args:
+            session: aiohttp session
             channel_id: YouTube channel ID
 
         Returns:
@@ -221,32 +225,32 @@ class YouTubeFetcher:
         }
 
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status != 200:
-                        logger.warning(
-                            "youtube_api_error",
-                            endpoint="channels",
-                            status=response.status,
-                        )
-                        return ""
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "youtube_api_error",
+                        endpoint="channels",
+                        status=response.status,
+                    )
+                    return ""
 
-                    data = await response.json()
-                    if "items" not in data or not data["items"]:
-                        return ""
+                data = await response.json()
+                if "items" not in data or not data["items"]:
+                    return ""
 
-                    return data["items"][0]["contentDetails"]["relatedPlaylists"][
-                        "uploads"
-                    ]
+                return data["items"][0]["contentDetails"]["relatedPlaylists"][
+                    "uploads"
+                ]
 
         except Exception as e:
             logger.debug("youtube_playlist_error", channel=channel_id, error=str(e))
             return ""
 
-    async def _get_playlist_videos(self, playlist_id: str) -> List[dict]:
+    async def _get_playlist_videos(self, session: aiohttp.ClientSession, playlist_id: str) -> List[dict]:
         """Get videos from a playlist.
 
         Args:
+            session: aiohttp session
             playlist_id: YouTube playlist ID
 
         Returns:
@@ -261,33 +265,33 @@ class YouTubeFetcher:
         }
 
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status != 200:
-                        logger.warning(
-                            "youtube_api_error",
-                            endpoint="playlistItems",
-                            status=response.status,
-                        )
-                        return []
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "youtube_api_error",
+                        endpoint="playlistItems",
+                        status=response.status,
+                    )
+                    return []
 
-                    data = await response.json()
-                    if "items" not in data:
-                        return []
+                data = await response.json()
+                if "items" not in data:
+                    return []
 
-                    return [
-                        {"videoId": item["snippet"]["resourceId"]["videoId"]}
-                        for item in data["items"]
-                    ]
+                return [
+                    {"videoId": item["snippet"]["resourceId"]["videoId"]}
+                    for item in data["items"]
+                ]
 
         except Exception as e:
             logger.debug("youtube_videos_error", playlist=playlist_id, error=str(e))
             return []
 
-    async def _get_video_details(self, video_ids: List[str]) -> List[dict]:
+    async def _get_video_details(self, session: aiohttp.ClientSession, video_ids: List[str]) -> List[dict]:
         """Get detailed information for videos.
 
         Args:
+            session: aiohttp session
             video_ids: List of video IDs
 
         Returns:
@@ -301,18 +305,17 @@ class YouTubeFetcher:
         }
 
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status != 200:
-                        logger.warning(
-                            "youtube_api_error",
-                            endpoint="videos",
-                            status=response.status,
-                        )
-                        return []
+            async with session.get(url, params=params) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "youtube_api_error",
+                        endpoint="videos",
+                        status=response.status,
+                    )
+                    return []
 
-                    data = await response.json()
-                    return data.get("items", [])
+                data = await response.json()
+                return data.get("items", [])
 
         except Exception as e:
             logger.debug("youtube_details_error", error=str(e))

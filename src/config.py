@@ -92,6 +92,17 @@ class Settings(BaseSettings):
         default=30, ge=1, le=365, description="History retention window in days"
     )
 
+    # Content validation and limits
+    min_content_length: int = Field(
+        default=100, description="Minimum content length for an article to be valid"
+    )
+    llm_content_preview_length: int = Field(
+        default=2000, description="Max characters of content to send to LLM"
+    )
+    x_max_per_account: int = Field(
+        default=5, description="Max posts per X account"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

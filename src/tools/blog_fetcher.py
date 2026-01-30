@@ -74,13 +74,14 @@ class BlogFetcher:
         logger.info("fetching_blogs", sources=len(self.BLOG_SOURCES))
 
         tasks = []
-        for name, config in self.BLOG_SOURCES.items():
-            if config["type"] == "rss":
-                tasks.append(self._fetch_rss(name, config))
-            else:
-                tasks.append(self._fetch_web(name, config))
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for name, config in self.BLOG_SOURCES.items():
+                if config["type"] == "rss":
+                    tasks.append(self._fetch_rss(session, name, config))
+                else:
+                    tasks.append(self._fetch_web(session, name, config))
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
         for i, (name, result) in enumerate(zip(self.BLOG_SOURCES.keys(), results)):
@@ -100,10 +101,11 @@ class BlogFetcher:
         return articles
 
     @async_retry(max_attempts=3, min_wait=2.0, max_wait=15.0)
-    async def _fetch_rss(self, source_name: str, config: dict) -> List[Article]:
+    async def _fetch_rss(self, session: aiohttp.ClientSession, source_name: str, config: dict) -> List[Article]:
         """Fetch articles from an RSS feed.
 
         Args:
+            session: aiohttp session
             source_name: Name of the source
             config: Source configuration
 
@@ -114,14 +116,13 @@ class BlogFetcher:
 
         url = config["url"]
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    logger.warning(
-                        "rss_http_error", source=source_name, status=response.status
-                    )
-                    return []
-                content = await response.text()
+        async with session.get(url) as response:
+            if response.status != 200:
+                logger.warning(
+                    "rss_http_error", source=source_name, status=response.status
+                )
+                return []
+            content = await response.text()
 
         # Parse feed
         feed = feedparser.parse(content)
@@ -163,10 +164,11 @@ class BlogFetcher:
         return articles
 
     @async_retry(max_attempts=2, min_wait=3.0, max_wait=10.0)
-    async def _fetch_web(self, source_name: str, config: dict) -> List[Article]:
+    async def _fetch_web(self, session: aiohttp.ClientSession, source_name: str, config: dict) -> List[Article]:
         """Fetch articles by scraping a web page.
 
         Args:
+            session: aiohttp session
             source_name: Name of the source
             config: Source configuration
 
@@ -178,14 +180,13 @@ class BlogFetcher:
             "User-Agent": "Mozilla/5.0 (compatible; AINewsBrief/1.0; +https://github.com/AINewsBrief)"
         }
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status != 200:
-                    logger.warning(
-                        "web_http_error", source=source_name, status=response.status
-                    )
-                    return []
-                html = await response.text()
+        async with session.get(url, headers=headers) as response:
+            if response.status != 200:
+                logger.warning(
+                    "web_http_error", source=source_name, status=response.status
+                )
+                return []
+            html = await response.text()
 
         soup = BeautifulSoup(html, "html.parser")
         articles = []

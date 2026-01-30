@@ -122,7 +122,7 @@ async def filter_node(state: BriefState) -> BriefState:
     logger.debug("time_filtered", count=len(time_filtered))
 
     # Filter by content length
-    content_filtered = [a for a in time_filtered if len(a.content) >= 100]
+    content_filtered = [a for a in time_filtered if len(a.content) >= settings.min_content_length]
     logger.debug("content_filtered", count=len(content_filtered))
 
     # Deduplicate against history

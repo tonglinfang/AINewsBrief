@@ -36,6 +36,7 @@ class TelegramSender:
                     chat_id=self.chat_id,
                     text=content,
                     disable_web_page_preview=True,
+                    parse_mode='Markdown',
                 )
                 return str(message.message_id)
             else:
@@ -88,6 +89,7 @@ class TelegramSender:
                     chat_id=self.chat_id,
                     text=chunk,
                     disable_web_page_preview=True,
+                    parse_mode='Markdown',
                 )
                 last_message_id = str(message.message_id)
                 

@@ -68,32 +68,34 @@ class GitHubFetcher:
         batch_size = 10
         all_articles = []
 
-        for i in range(0, len(self.REPOSITORIES), batch_size):
-            batch = self.REPOSITORIES[i : i + batch_size]
-            tasks = [self._fetch_repo_releases(repo) for repo in batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for i in range(0, len(self.REPOSITORIES), batch_size):
+                batch = self.REPOSITORIES[i : i + batch_size]
+                tasks = [self._fetch_repo_releases(session, repo) for repo in batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for repo, result in zip(batch, results):
-                repo_name = f"{repo['owner']}/{repo['repo']}"
-                if isinstance(result, list):
-                    all_articles.extend(result)
-                    if result:
-                        logger.info("github_fetched", repo=repo_name, count=len(result))
-                elif isinstance(result, Exception):
-                    logger.warning("github_fetch_error", repo=repo_name, error=str(result))
+                for repo, result in zip(batch, results):
+                    repo_name = f"{repo['owner']}/{repo['repo']}"
+                    if isinstance(result, list):
+                        all_articles.extend(result)
+                        if result:
+                            logger.info("github_fetched", repo=repo_name, count=len(result))
+                    elif isinstance(result, Exception):
+                        logger.warning("github_fetch_error", repo=repo_name, error=str(result))
 
-            # Rate limit protection
-            if i + batch_size < len(self.REPOSITORIES):
-                await asyncio.sleep(1)
+                # Rate limit protection
+                if i + batch_size < len(self.REPOSITORIES):
+                    await asyncio.sleep(1)
 
         logger.info("github_total", count=len(all_articles))
         return all_articles
 
     @async_retry(max_attempts=2, min_wait=2.0, max_wait=10.0)
-    async def _fetch_repo_releases(self, repo_config: dict) -> List[Article]:
+    async def _fetch_repo_releases(self, session: aiohttp.ClientSession, repo_config: dict) -> List[Article]:
         """Fetch releases for a single repository.
 
         Args:
+            session: aiohttp session
             repo_config: Repository configuration dict
 
         Returns:
@@ -112,18 +114,17 @@ class GitHubFetcher:
         if self.github_token:
             headers["Authorization"] = f"token {self.github_token}"
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.get(url, headers=headers, params={"per_page": 5}) as response:
-                if response.status == 404:
-                    return []
-                if response.status == 403:
-                    # Rate limited
-                    logger.warning("github_rate_limited", repo=f"{owner}/{repo}")
-                    return []
-                if response.status != 200:
-                    return []
+        async with session.get(url, headers=headers, params={"per_page": 5}) as response:
+            if response.status == 404:
+                return []
+            if response.status == 403:
+                # Rate limited
+                logger.warning("github_rate_limited", repo=f"{owner}/{repo}")
+                return []
+            if response.status != 200:
+                return []
 
-                releases = await response.json()
+            releases = await response.json()
 
         articles = []
         cutoff_time = datetime.now(timezone.utc) - self.max_age

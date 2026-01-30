@@ -55,7 +55,7 @@ class XFetcher:
     def __init__(self):
         """Initialize X fetcher."""
         self.max_age = timedelta(hours=settings.article_age_hours)
-        self.max_per_account = 5  # Limit posts per account
+        self.max_per_account = settings.x_max_per_account  # Limit posts per account
         self.timeout = aiohttp.ClientTimeout(total=30)
         self.current_nitter_idx = 0
 
@@ -66,11 +66,13 @@ class XFetcher:
             List of Article objects
         """
         logger.info("fetching_x_posts", accounts=len(self.ACCOUNTS))
-        tasks = [
-            self.fetch_account(username, info)
-            for username, info in self.ACCOUNTS.items()
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            tasks = [
+                self.fetch_account(session, username, info)
+                for username, info in self.ACCOUNTS.items()
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
         for username, result in zip(self.ACCOUNTS.keys(), results):
@@ -85,11 +87,12 @@ class XFetcher:
 
     @async_retry(max_attempts=3, min_wait=1.0, max_wait=10.0)
     async def fetch_account(
-        self, username: str, account_info: dict
+        self, session: aiohttp.ClientSession, username: str, account_info: dict
     ) -> List[Article]:
         """Fetch posts from a single X account using Nitter.
 
         Args:
+            session: aiohttp session
             username: X username (without @)
             account_info: Account metadata (name, priority)
 
@@ -100,7 +103,7 @@ class XFetcher:
         for instance in self.NITTER_INSTANCES:
             try:
                 articles = await self._fetch_from_nitter(
-                    instance, username, account_info
+                    session, instance, username, account_info
                 )
                 if articles:
                     return articles
@@ -117,11 +120,12 @@ class XFetcher:
         return []
 
     async def _fetch_from_nitter(
-        self, nitter_instance: str, username: str, account_info: dict
+        self, session: aiohttp.ClientSession, nitter_instance: str, username: str, account_info: dict
     ) -> List[Article]:
         """Fetch posts from a Nitter instance.
 
         Args:
+            session: aiohttp session
             nitter_instance: Nitter instance URL
             username: X username
             account_info: Account metadata
@@ -132,18 +136,17 @@ class XFetcher:
         url = f"{nitter_instance}/{username}/rss"
 
         try:
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        logger.debug(
-                            "nitter_http_error",
-                            instance=nitter_instance,
-                            username=username,
-                            status=response.status,
-                        )
-                        return []
+            async with session.get(url) as response:
+                if response.status != 200:
+                    logger.debug(
+                        "nitter_http_error",
+                        instance=nitter_instance,
+                        username=username,
+                        status=response.status,
+                    )
+                    return []
 
-                    content = await response.text()
+                content = await response.text()
 
             # Parse RSS feed from Nitter
             import feedparser

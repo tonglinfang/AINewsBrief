@@ -2,7 +2,8 @@
 
 import asyncio
 import json
-from typing import List
+import re
+from typing import List, Dict, Any
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -211,7 +212,7 @@ class LLMAnalyzer:
         """
         try:
             # Prepare prompt
-            content_preview = article.content[:2000]  # Limit content length
+            content_preview = article.content[:settings.llm_content_preview_length]  # Limit content length
             user_prompt = self.ANALYSIS_PROMPT_TEMPLATE.format(
                 title=article.title, source=article.source, content=content_preview
             )
@@ -244,14 +245,15 @@ class LLMAnalyzer:
                 title=article.title[:50],
                 error=str(e),
             )
-            # Return default analysis on error
+            # Return default analysis on error with LOW score to filter it out
             return AnalysisResult(
                 article=article,
                 title_cn=article.title[:200],  # Fallback to original title
-                summary=article.title[:150],
+                summary="分析失敗，請查看原始文章",
                 category="Tools/Products",
-                importance_score=5,
-                insight="分析失敗，使用預設值",
+                importance_score=0,  # Set to 0 to ensure it gets filtered out
+                ai_relevance_score=0, # Set to 0 to ensure it gets filtered out
+                insight="自動分析失敗",
             )
 
     def _parse_response(self, response_text: str) -> dict:
@@ -264,19 +266,29 @@ class LLMAnalyzer:
             Dict with analysis fields
         """
         try:
-            # Try to extract JSON from response
-            # Handle potential markdown code blocks
+            # Try to extract JSON from response using regex
+            # Handle multiple formats: ```json ... ```, ``` ... ```, or just { ... }
             text = response_text.strip()
-
-            # Remove markdown code blocks if present
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-                text = text.strip()
+            
+            patterns = [
+                r'```json\s*([\s\S]*?)\s*```',
+                r'```\s*([\s\S]*?)\s*```',
+                r'(\{[\s\S]*\})'
+            ]
+            
+            json_str = None
+            for pattern in patterns:
+                match = re.search(pattern, text)
+                if match:
+                    json_str = match.group(1)
+                    break
+            
+            # If no pattern matched, try parsing the whole text
+            if not json_str:
+                json_str = text
 
             # Parse JSON
-            data = json.loads(text)
+            data = json.loads(json_str)
 
             # Validate required fields
             required_fields = ["title_cn", "summary", "category", "importance_score", "ai_relevance_score", "insight"]
@@ -284,8 +296,10 @@ class LLMAnalyzer:
                 if field not in data:
                     # Provide default for ai_relevance_score if missing (backward compatibility)
                     if field == "ai_relevance_score":
-                        data["ai_relevance_score"] = 10
+                        data["ai_relevance_score"] = 5 # Default to middle score if missing
                     else:
+                        # Allow missing fields to be filled with defaults if mostly successful? 
+                        # For now, strict validation is safer to avoid bad data
                         raise ValueError(f"Missing required field: {field}")
 
             # Validate category

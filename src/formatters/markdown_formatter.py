@@ -38,10 +38,10 @@ class MarkdownFormatter:
 
 {{ category_emoji[category] }} {{ category_names[category] }}
 {% for analysis in articles %}
-{{ ns.num }}. {{ analysis.title_cn }} {{ importance_stars(analysis.importance_score) }}
-┃ {{ analysis.summary }}
-┃ 💡 {{ analysis.insight }}
-┃ {{ analysis.article.source }} · [閱讀原文]({{ analysis.article.url }})
+{{ ns.num }}. {{ escape(analysis.title_cn) }} {{ importance_stars(analysis.importance_score) }}
+┃ {{ escape(analysis.summary) }}
+┃ 💡 {{ escape(analysis.insight) }}
+┃ {{ escape(analysis.article.source) }} · [閱讀原文]({{ analysis.article.url }})
 {% set ns.num = ns.num + 1 %}
 {% endfor %}
 {% endif %}
@@ -53,6 +53,24 @@ class MarkdownFormatter:
     def __init__(self):
         """Initialize markdown formatter."""
         self.template = Template(self.TEMPLATE)
+
+    @staticmethod
+    def _escape_markdown(text: str) -> str:
+        """Escape markdown special characters.
+
+        Args:
+            text: Text to escape
+
+        Returns:
+            Escaped text
+        """
+        if not text:
+            return ""
+        # Escape characters that have special meaning in Markdown
+        chars_to_escape = ["_", "*", "`", "["]
+        for char in chars_to_escape:
+            text = text.replace(char, f"\\{char}")
+        return text
 
     @staticmethod
     def _importance_stars(score: int) -> str:
@@ -99,6 +117,7 @@ class MarkdownFormatter:
             category_names=self.CATEGORY_NAMES_CN,
             format_time=self._format_relative_time,
             importance_stars=self._importance_stars,
+            escape=self._escape_markdown,
             generation_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             llm_provider=settings.llm_provider,
             llm_model=settings.llm_model,

@@ -42,8 +42,9 @@ class RedditFetcher:
         """
         logger.info("fetching_reddit", subreddits=len(self.SUBREDDITS))
 
-        tasks = [self.fetch_subreddit(subreddit) for subreddit in self.SUBREDDITS]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            tasks = [self.fetch_subreddit(session, subreddit) for subreddit in self.SUBREDDITS]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
         for subreddit, result in zip(self.SUBREDDITS, results):
@@ -58,10 +59,11 @@ class RedditFetcher:
         return articles
 
     @async_retry(max_attempts=3, min_wait=2.0, max_wait=15.0)
-    async def fetch_subreddit(self, subreddit: str) -> List[Article]:
+    async def fetch_subreddit(self, session: aiohttp.ClientSession, subreddit: str) -> List[Article]:
         """Fetch hot posts from a subreddit using Reddit JSON API.
 
         Args:
+            session: aiohttp session
             subreddit: Subreddit name
 
         Returns:
@@ -71,17 +73,16 @@ class RedditFetcher:
         params = {"limit": self.max_per_subreddit * 2}  # Over-fetch for filtering
         headers = {"User-Agent": settings.reddit_user_agent}
 
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.get(url, params=params, headers=headers) as response:
-                if response.status != 200:
-                    logger.warning(
-                        "reddit_http_error",
-                        subreddit=subreddit,
-                        status=response.status,
-                    )
-                    return []
+        async with session.get(url, params=params, headers=headers) as response:
+            if response.status != 200:
+                logger.warning(
+                    "reddit_http_error",
+                    subreddit=subreddit,
+                    status=response.status,
+                )
+                return []
 
-                data = await response.json()
+            data = await response.json()
 
         articles = []
         cutoff_time = datetime.now(timezone.utc) - self.max_age

@@ -42,8 +42,10 @@ class RSSFetcher:
             List of Article objects
         """
         logger.info("fetching_rss_feeds", sources=len(self.RSS_FEEDS))
-        tasks = [self.fetch_feed(name, url) for name, url in self.RSS_FEEDS.items()]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            tasks = [self.fetch_feed(session, name, url) for name, url in self.RSS_FEEDS.items()]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
         articles = []
         for name, result in zip(self.RSS_FEEDS.keys(), results):
@@ -57,10 +59,11 @@ class RSSFetcher:
         return articles
 
     @async_retry(max_attempts=3, min_wait=1.0, max_wait=10.0)
-    async def fetch_feed(self, source_name: str, feed_url: str) -> List[Article]:
+    async def fetch_feed(self, session: aiohttp.ClientSession, source_name: str, feed_url: str) -> List[Article]:
         """Fetch articles from a single RSS feed.
 
         Args:
+            session: aiohttp session
             source_name: Name of the source
             feed_url: RSS feed URL
 
@@ -69,16 +72,15 @@ class RSSFetcher:
         """
         try:
             # Fetch with aiohttp for better timeout control
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                async with session.get(feed_url) as response:
-                    if response.status != 200:
-                        logger.warning(
-                            "rss_http_error",
-                            source=source_name,
-                            status=response.status,
-                        )
-                        return []
-                    content = await response.text()
+            async with session.get(feed_url) as response:
+                if response.status != 200:
+                    logger.warning(
+                        "rss_http_error",
+                        source=source_name,
+                        status=response.status,
+                    )
+                    return []
+                content = await response.text()
 
             # Parse feed
             feed = feedparser.parse(content)
