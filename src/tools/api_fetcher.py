@@ -207,7 +207,8 @@ class HackerNewsFetcher:
                     continue
 
                 # Build article with extracted content
-                url = story.get("url") or f"https://news.ycombinator.com/item?id={story.get('id')}"
+                # Always use HN discussion URL as the primary link
+                url = f"https://news.ycombinator.com/item?id={story.get('id')}"
                 content = story.get("extracted_content") or story.get("text") or story.get("title", "")
 
                 # Add HN discussion metrics
