@@ -1,11 +1,12 @@
 """Markdown formatter for daily reports."""
 
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 from collections import defaultdict
 from jinja2 import Template
 from src.models.analysis import AnalysisResult, CategoryType
 from src.models.report import DailyReport
+from src.models.deep_analysis import DeepAnalysis
 
 
 class MarkdownFormatter:
@@ -38,9 +39,46 @@ class MarkdownFormatter:
 
 {{ category_emoji[category] }} *{{ category_names[category] }}*
 {% for analysis in articles %}
+{% set deep = deep_analyses_map.get(analysis.article.url) %}
 *{{ ns.num }}.* *{{ escape(analysis.title_cn) }}* {{ importance_stars(analysis.importance_score) }}
 ┃ {{ escape(analysis.summary) }}
 ┃ 💡 _{{ escape(analysis.insight) }}_
+{% if deep %}
+┃
+┃ 🔍 *深度分析*
+┃
+┃ 📖 *技術背景*
+┃ {{ escape(deep.technical_context.background) }}
+{% if deep.technical_context.key_technologies %}
+┃ 關鍵技術: {{ deep.technical_context.key_technologies|join(', ') }}
+{% endif %}
+┃
+┃ 🎯 *核心洞察*
+{% for insight in deep.key_insights %}
+┃ • {{ escape(insight) }}
+{% endfor %}
+┃
+┃ 📊 *影響分析* (影響等級: {{ deep.impact.impact_level }}/5)
+┃ 直接影響: {{ escape(deep.impact.immediate_impact) }}
+┃ 長期影響: {{ escape(deep.impact.long_term_impact) }}
+{% if deep.impact.affected_sectors %}
+┃ 受影響領域: {{ deep.impact.affected_sectors|join(', ') }}
+{% endif %}
+{% if deep.guidance and deep.guidance.action_items %}
+┃
+┃ 💼 *實踐建議*
+{% for action in deep.guidance.action_items %}
+┃ ✅ {{ escape(action) }}
+{% endfor %}
+{% endif %}
+{% if deep.controversies %}
+┃
+┃ ⚠️ *爭議點*
+{% for controversy in deep.controversies %}
+┃ • {{ escape(controversy) }}
+{% endfor %}
+{% endif %}
+{% endif %}
 └ 🔗 [{{ escape(analysis.article.source) }}]({{ analysis.article.url }})
 {% set ns.num = ns.num + 1 %}
 {% endfor %}
@@ -86,18 +124,29 @@ class MarkdownFormatter:
         star_count = 5 if score >= 9 else 4 if score >= 7 else 3 if score >= 5 else 2 if score >= 3 else 1
         return "⭐" * star_count
 
-    def format(self, date: datetime, analyzed_articles: List[AnalysisResult]) -> DailyReport:
+    def format(
+        self,
+        date: datetime,
+        analyzed_articles: List[AnalysisResult],
+        deep_analyses: Optional[List[DeepAnalysis]] = None
+    ) -> DailyReport:
         """Format analyzed articles into a daily report.
 
         Args:
             date: Report date
             analyzed_articles: List of analyzed articles
+            deep_analyses: Optional list of deep analyses for high-value articles
 
         Returns:
             DailyReport object
         """
         # Group articles by category and sort by importance
         articles_by_category = self._group_by_category(analyzed_articles)
+
+        # Create deep analyses map for quick lookup
+        deep_analyses_map = {}
+        if deep_analyses:
+            deep_analyses_map = {deep.article_url: deep for deep in deep_analyses}
 
         # Calculate statistics
         total_articles = len(analyzed_articles)
@@ -115,6 +164,7 @@ class MarkdownFormatter:
             total_articles=total_articles,
             average_importance=f"{average_importance:.1f}",
             articles_by_category=articles_by_category,
+            deep_analyses_map=deep_analyses_map,
             category_emoji=self.CATEGORY_EMOJIS,
             category_names=self.CATEGORY_NAMES_CN,
             format_time=self._format_relative_time,

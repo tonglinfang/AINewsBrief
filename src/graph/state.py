@@ -5,6 +5,7 @@ from typing import List, Optional, TypedDict
 from src.models.article import Article
 from src.models.analysis import AnalysisResult
 from src.models.report import DailyReport
+from src.models.deep_analysis import DeepAnalysis
 
 
 class BriefState(TypedDict):
@@ -21,6 +22,7 @@ class BriefState(TypedDict):
     raw_articles: List[Article]  # All fetched articles
     filtered_articles: List[Article]  # After filtering and deduplication
     analyzed_articles: List[AnalysisResult]  # After LLM analysis
+    deep_analyses: List[DeepAnalysis]  # Deep analysis for high-value articles
 
     # Output
     report: Optional[DailyReport]  # Final formatted report

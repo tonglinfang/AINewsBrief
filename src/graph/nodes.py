@@ -16,6 +16,7 @@ from src.tools.x_fetcher import XFetcher
 from src.tools.youtube_fetcher import YouTubeFetcher
 from src.tools.telegram_sender import TelegramSender
 from src.analyzers.llm_analyzer import LLMAnalyzer
+from src.analyzers.deep_analyzer import DeepAnalyzer
 from src.formatters.markdown_formatter import MarkdownFormatter
 from src.utils.deduplication import deduplicate_articles
 from src.utils.dedup_history import (
@@ -231,6 +232,50 @@ async def analyze_node(state: BriefState) -> BriefState:
     }
 
 
+async def deep_analyze_node(state: BriefState) -> BriefState:
+    """Perform deep analysis on high-value articles.
+
+    Args:
+        state: Current workflow state
+
+    Returns:
+        Updated state with deep_analyses populated
+    """
+    analyzed_articles = state.get("analyzed_articles", [])
+
+    # Check if deep analysis is enabled
+    if not getattr(settings, 'enable_deep_analysis', False):
+        logger.info("deep_analysis_disabled")
+        return {
+            **state,
+            "deep_analyses": [],
+        }
+
+    if not analyzed_articles:
+        logger.info("no_articles_for_deep_analysis")
+        return {
+            **state,
+            "deep_analyses": [],
+        }
+
+    logger.info("deep_analyze_node_start", article_count=len(analyzed_articles))
+
+    # Perform deep analysis
+    analyzer = DeepAnalyzer()
+    deep_analyses = await analyzer.analyze_batch(analyzed_articles)
+
+    logger.info(
+        "deep_analyze_node_complete",
+        deep_analyzed=len(deep_analyses),
+        skipped=len(analyzed_articles) - len(deep_analyses),
+    )
+
+    return {
+        **state,
+        "deep_analyses": deep_analyses,
+    }
+
+
 async def format_node(state: BriefState) -> BriefState:
     """Format analysis results into markdown report.
 
@@ -241,15 +286,20 @@ async def format_node(state: BriefState) -> BriefState:
         Updated state with report populated
     """
     analyzed_articles = state["analyzed_articles"]
+    deep_analyses = state.get("deep_analyses", [])
     date = state["date"]
 
-    logger.info("format_node_start", article_count=len(analyzed_articles))
+    logger.info(
+        "format_node_start",
+        article_count=len(analyzed_articles),
+        deep_analyses_count=len(deep_analyses)
+    )
 
     if not analyzed_articles:
         logger.warning("no_articles_to_format")
 
     formatter = MarkdownFormatter()
-    report = formatter.format(date, analyzed_articles)
+    report = formatter.format(date, analyzed_articles, deep_analyses)
 
     logger.info(
         "format_node_complete",
