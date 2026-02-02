@@ -28,7 +28,8 @@ class MarkdownFormatter:
         "Tutorial": "技術教程",
     }
 
-    TEMPLATE = """📅 *AI News Brief* | {{ date }}
+    TEMPLATE = """📱 *AINewsBrief*
+📅 {{ push_time }}
 ━━━━━━━━━━━━
 📊 *今日摘要* (共 {{ total_articles }} 則)
 {% set ns = namespace(num=1) %}
@@ -107,8 +108,10 @@ class MarkdownFormatter:
         )
 
         # Generate markdown
+        push_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         markdown_content = self.template.render(
             date=date.strftime("%Y-%m-%d"),
+            push_time=push_time,
             total_articles=total_articles,
             average_importance=f"{average_importance:.1f}",
             articles_by_category=articles_by_category,
