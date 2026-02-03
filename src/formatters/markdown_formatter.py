@@ -29,7 +29,7 @@ class MarkdownFormatter:
         "Tutorial": "技術教程",
     }
 
-    TEMPLATE = """🤖 *AI News Brief*
+    TEMPLATE = """🤖 *AI快訊*
 ⏰ {{ push_time }}
 ━━━━━━━━━━━━
 📊 *本期摘要* · 共 {{ total_articles }} 則
