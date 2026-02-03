@@ -29,10 +29,10 @@ class MarkdownFormatter:
         "Tutorial": "技術教程",
     }
 
-    TEMPLATE = """📱 *AINewsBrief*
-📅 {{ push_time }}
+    TEMPLATE = """🤖 *AI News Brief*
+⏰ {{ push_time }}
 ━━━━━━━━━━━━
-📊 *今日摘要* (共 {{ total_articles }} 則)
+📊 *本期摘要* · 共 {{ total_articles }} 則
 {% set ns = namespace(num=1) %}
 {% for category, articles in articles_by_category.items() %}
 {% if articles %}
