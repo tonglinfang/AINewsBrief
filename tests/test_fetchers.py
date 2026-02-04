@@ -42,24 +42,20 @@ class TestHackerNewsFetcher:
     """Tests for HackerNews fetcher."""
 
     def test_ai_keywords_filtering(self):
-        """Test that AI keywords are properly defined."""
-        from src.tools.api_fetcher import HackerNewsFetcher
-
-        fetcher = HackerNewsFetcher()
+        """Test that AI keywords are properly defined in shared module."""
+        from src.utils.ai_filter import AI_KEYWORDS
 
         # Check essential keywords are present
-        assert "ai" in fetcher.AI_KEYWORDS
-        assert "llm" in fetcher.AI_KEYWORDS
-        assert "gpt" in fetcher.AI_KEYWORDS
-        assert "claude" in fetcher.AI_KEYWORDS
-        assert "anthropic" in fetcher.AI_KEYWORDS
-        assert "openai" in fetcher.AI_KEYWORDS
+        assert "ai" in AI_KEYWORDS
+        assert "llm" in AI_KEYWORDS
+        assert "gpt" in AI_KEYWORDS
+        assert "claude" in AI_KEYWORDS
+        assert "anthropic" in AI_KEYWORDS
+        assert "openai" in AI_KEYWORDS
 
     def test_keyword_matching(self):
         """Test keyword matching logic."""
-        from src.tools.api_fetcher import HackerNewsFetcher
-
-        fetcher = HackerNewsFetcher()
+        from src.utils.ai_filter import is_ai_related
 
         # Test titles that should match
         ai_titles = [
@@ -70,17 +66,11 @@ class TestHackerNewsFetcher:
         ]
 
         for title in ai_titles:
-            matches = any(
-                keyword in title.lower() for keyword in fetcher.AI_KEYWORDS
-            )
-            assert matches, f"Expected '{title}' to match AI keywords"
+            assert is_ai_related(title), f"Expected '{title}' to match AI keywords"
 
         # Test title that should not match
         non_ai_title = "Apple announces new iPhone"
-        matches = any(
-            keyword in non_ai_title.lower() for keyword in fetcher.AI_KEYWORDS
-        )
-        assert not matches
+        assert not is_ai_related(non_ai_title)
 
 
 class TestRedditFetcher:

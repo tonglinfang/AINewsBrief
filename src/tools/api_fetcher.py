@@ -11,6 +11,7 @@ from src.models.article import Article
 from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.retry import async_retry
+from src.utils.ai_filter import is_ai_related
 
 logger = get_logger("api_fetcher")
 
@@ -144,16 +145,6 @@ class HackerNewsFetcher:
 
     API_BASE = "https://hacker-news.firebaseio.com/v0"
 
-    # Expanded AI keywords for better filtering
-    AI_KEYWORDS = [
-        "ai", "llm", "gpt", "claude", "anthropic", "openai",
-        "machine learning", "neural", "transformer", "gemini",
-        "chatgpt", "copilot", "midjourney", "stable diffusion",
-        "langchain", "langgraph", "rag", "embedding", "vector",
-        "fine-tuning", "llama", "mistral", "deepseek", "qwen",
-        "hugging face", "pytorch", "tensorflow", "artificial intelligence",
-    ]
-
     def __init__(self):
         """Initialize HackerNews fetcher."""
         self.max_age = timedelta(hours=settings.article_age_hours)
@@ -192,11 +183,8 @@ class HackerNewsFetcher:
                     continue
 
                 # Check if AI-related
-                title_lower = story.get("title", "").lower()
-                content_lower = story.get("extracted_content", "").lower()
-                combined_text = f"{title_lower} {content_lower}"
-
-                if not any(keyword in combined_text for keyword in self.AI_KEYWORDS):
+                combined_text = f"{story.get('title', '')} {story.get('extracted_content', '')}"
+                if not is_ai_related(combined_text):
                     continue
 
                 # Check age

@@ -97,6 +97,34 @@ async def fetch_news_node(state: BriefState) -> BriefState:
     }
 
 
+# Source priority mapping for article sorting (higher = more important)
+SOURCE_PRIORITIES = {
+    "OpenAI Blog": 100,
+    "Anthropic Blog": 100,
+    "Google AI Blog": 95,
+    "DeepMind Blog": 95,
+    "GitHub": 80,
+    "HackerNews": 70,
+    "ArXiv": 60,
+}
+DEFAULT_PRIORITY = 50
+
+
+def _coerce_utc(value: datetime) -> datetime:
+    """Ensure datetime has UTC timezone."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _get_source_priority(source: str) -> int:
+    """Get priority for a source name."""
+    for source_key, priority in SOURCE_PRIORITIES.items():
+        if source_key in source:
+            return priority
+    return DEFAULT_PRIORITY
+
+
 async def filter_node(state: BriefState) -> BriefState:
     """Filter and deduplicate articles.
 
@@ -110,18 +138,12 @@ async def filter_node(state: BriefState) -> BriefState:
 
     raw_articles = state["raw_articles"]
     max_articles = state["max_articles"]
-
-    def _coerce_utc(value: datetime) -> datetime:
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
-
-    # Filter by age (already done in fetchers, but double-check)
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=settings.article_age_hours)
+
+    # Apply filters sequentially
     time_filtered = [a for a in raw_articles if _coerce_utc(a.published_at) >= cutoff_time]
     logger.debug("time_filtered", count=len(time_filtered))
 
-    # Filter by content length
     content_filtered = [a for a in time_filtered if len(a.content) >= settings.min_content_length]
     logger.debug("content_filtered", count=len(content_filtered))
 
@@ -130,10 +152,7 @@ async def filter_node(state: BriefState) -> BriefState:
         settings.dedup_history_path, settings.dedup_history_days
     )
     history_filtered = filter_previously_seen(
-        content_filtered,
-        seen_urls,
-        seen_titles,
-        title_similarity_threshold=0.8,
+        content_filtered, seen_urls, seen_titles, title_similarity_threshold=0.8
     )
     logger.debug("history_filtered", count=len(history_filtered))
 
@@ -141,25 +160,12 @@ async def filter_node(state: BriefState) -> BriefState:
     deduplicated = deduplicate_articles(history_filtered)
     logger.debug("deduplicated", count=len(deduplicated))
 
-    # Sort by source priority (official blogs first, then HN/Reddit by engagement)
-    def priority_sort(article: Article) -> tuple:
-        source_priority = {
-            "OpenAI Blog": 100,
-            "Anthropic Blog": 100,
-            "Google AI Blog": 95,
-            "DeepMind Blog": 95,
-            "GitHub": 80,
-            "HackerNews": 70,
-            "ArXiv": 60,
-        }
-        for source_key, priority in source_priority.items():
-            if source_key in article.source:
-                return (-priority, article.published_at)
-        return (-50, article.published_at)
+    # Sort by source priority (descending) then by published time
+    sorted_articles = sorted(
+        deduplicated,
+        key=lambda a: (-_get_source_priority(a.source), a.published_at)
+    )
 
-    sorted_articles = sorted(deduplicated, key=priority_sort)
-
-    # Limit to max articles
     filtered_articles = sorted_articles[:max_articles]
 
     logger.info(

@@ -8,6 +8,7 @@ from src.models.article import Article
 from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.retry import async_retry
+from src.utils.ai_filter import is_ai_related
 
 logger = get_logger("youtube_fetcher")
 
@@ -175,7 +176,7 @@ class YouTubeFetcher:
                     # Filter: must be AI-related in title or description
                     title = video["snippet"]["title"]
                     description = video["snippet"]["description"]
-                    if not self._is_ai_related(title + " " + description):
+                    if not is_ai_related(title + " " + description):
                         continue
 
                     article = Article(
@@ -321,41 +322,3 @@ class YouTubeFetcher:
             logger.debug("youtube_details_error", error=str(e))
             return []
 
-    def _is_ai_related(self, text: str) -> bool:
-        """Check if video content is AI-related.
-
-        Args:
-            text: Video title + description
-
-        Returns:
-            True if AI-related
-        """
-        text_lower = text.lower()
-        ai_keywords = [
-            "ai",
-            "gpt",
-            "llm",
-            "claude",
-            "chatgpt",
-            "openai",
-            "anthropic",
-            "machine learning",
-            "deep learning",
-            "neural network",
-            "transformer",
-            "diffusion",
-            "stable diffusion",
-            "midjourney",
-            "generative",
-            "artificial intelligence",
-            "gemini",
-            "mistral",
-            "llama",
-            "computer vision",
-            "nlp",
-            "natural language",
-            "reinforcement learning",
-            "agi",
-        ]
-
-        return any(keyword in text_lower for keyword in ai_keywords)

@@ -8,6 +8,7 @@ from src.models.article import Article
 from src.config import settings
 from src.utils.logger import get_logger
 from src.utils.retry import async_retry
+from src.utils.ai_filter import is_ai_related
 
 logger = get_logger("x_fetcher")
 
@@ -184,7 +185,7 @@ class XFetcher:
                     post_text = BeautifulSoup(post_content, "html.parser").get_text()
 
                     # Filter: must mention AI-related keywords
-                    if not self._is_ai_related(post_text):
+                    if not is_ai_related(post_text):
                         continue
 
                     article = Article(
@@ -217,41 +218,3 @@ class XFetcher:
             )
             raise
 
-    def _is_ai_related(self, text: str) -> bool:
-        """Check if post content is AI-related.
-
-        Args:
-            text: Post text content
-
-        Returns:
-            True if AI-related
-        """
-        text_lower = text.lower()
-        ai_keywords = [
-            "ai",
-            "gpt",
-            "llm",
-            "claude",
-            "chatgpt",
-            "openai",
-            "anthropic",
-            "machine learning",
-            "deep learning",
-            "neural network",
-            "transformer",
-            "diffusion",
-            "stable diffusion",
-            "midjourney",
-            "generative",
-            "model",
-            "training",
-            "inference",
-            "agi",
-            "artificial intelligence",
-            "gemini",
-            "bard",
-            "mistral",
-            "llama",
-        ]
-
-        return any(keyword in text_lower for keyword in ai_keywords)

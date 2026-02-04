@@ -5,6 +5,9 @@ from typing import Optional
 from telegram import Bot
 from src.models.report import DailyReport
 from src.config import settings
+from src.utils.logger import get_logger
+
+logger = get_logger("telegram_sender")
 
 
 class TelegramSender:
@@ -44,9 +47,12 @@ class TelegramSender:
                 return await self._send_long_message(content)
 
         except Exception as e:
-            print(f"Error sending Telegram message: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(
+                "telegram_send_error",
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return None
 
     async def _send_long_message(self, content: str) -> Optional[str]:
@@ -100,9 +106,12 @@ class TelegramSender:
             return last_message_id
 
         except Exception as e:
-            print(f"Error sending split messages: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(
+                "telegram_split_message_error",
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
             return None
 
     async def send_error(self, error_message: str) -> None:
@@ -117,4 +126,4 @@ class TelegramSender:
                 text=f"⚠️ Error in AI News Brief\n\n{error_message}",
             )
         except Exception as e:
-            print(f"Error sending error notification: {e}")
+            logger.warning("telegram_error_notification_failed", error=str(e))

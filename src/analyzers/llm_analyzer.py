@@ -265,54 +265,61 @@ class LLMAnalyzer:
         Returns:
             Dict with analysis fields
         """
-        try:
-            # Try to extract JSON from response using regex
-            # Handle multiple formats: ```json ... ```, ``` ... ```, or just { ... }
-            text = response_text.strip()
-            
-            patterns = [
-                r'```json\s*([\s\S]*?)\s*```',
-                r'```\s*([\s\S]*?)\s*```',
-                r'(\{[\s\S]*\})'
-            ]
-            
-            json_str = None
-            for pattern in patterns:
-                match = re.search(pattern, text)
-                if match:
-                    json_str = match.group(1)
-                    break
-            
-            # If no pattern matched, try parsing the whole text
-            if not json_str:
-                json_str = text
+        json_str = self._extract_json_from_response(response_text)
+        data = json.loads(json_str)
+        return self._validate_and_normalize_data(data, response_text)
 
-            # Parse JSON
-            data = json.loads(json_str)
+    def _extract_json_from_response(self, response_text: str) -> str:
+        """Extract JSON string from LLM response.
 
-            # Validate required fields
-            required_fields = ["title_cn", "summary", "category", "importance_score", "ai_relevance_score", "insight"]
-            for field in required_fields:
-                if field not in data:
-                    # Provide default for ai_relevance_score if missing (backward compatibility)
-                    if field == "ai_relevance_score":
-                        data["ai_relevance_score"] = 5 # Default to middle score if missing
-                    else:
-                        # Allow missing fields to be filled with defaults if mostly successful? 
-                        # For now, strict validation is safer to avoid bad data
-                        raise ValueError(f"Missing required field: {field}")
+        Args:
+            response_text: Raw LLM response
 
-            # Validate category
-            valid_categories = ["Breaking News", "Research", "Tools/Products", "Business", "Tutorial"]
-            if data["category"] not in valid_categories:
-                data["category"] = "Tools/Products"
+        Returns:
+            Extracted JSON string
+        """
+        text = response_text.strip()
+        patterns = [
+            r'```json\s*([\s\S]*?)\s*```',
+            r'```\s*([\s\S]*?)\s*```',
+            r'(\{[\s\S]*\})'
+        ]
 
-            return data
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
 
-        except Exception as e:
-            logger.error(
-                "llm_response_parse_error",
-                error=str(e),
-                response_preview=response_text[:200],
-            )
-            raise
+        return text
+
+    def _validate_and_normalize_data(self, data: dict, response_text: str) -> dict:
+        """Validate and normalize parsed analysis data.
+
+        Args:
+            data: Parsed JSON data
+            response_text: Original response for error logging
+
+        Returns:
+            Validated and normalized data dict
+        """
+        required_fields = ["title_cn", "summary", "category", "importance_score", "insight"]
+
+        for field in required_fields:
+            if field not in data:
+                logger.error(
+                    "llm_response_parse_error",
+                    error=f"Missing required field: {field}",
+                    response_preview=response_text[:200],
+                )
+                raise ValueError(f"Missing required field: {field}")
+
+        # Default ai_relevance_score for backward compatibility
+        if "ai_relevance_score" not in data:
+            data["ai_relevance_score"] = 5
+
+        # Normalize category
+        valid_categories = ["Breaking News", "Research", "Tools/Products", "Business", "Tutorial"]
+        if data["category"] not in valid_categories:
+            data["category"] = "Tools/Products"
+
+        return data
