@@ -13,7 +13,7 @@ from collections import defaultdict
 from src.models.analysis import AnalysisResult, CategoryType
 from src.models.report import DailyReport
 from src.models.deep_analysis import DeepAnalysis
-from formatters.unified_formatter import UnifiedMessageFormatter
+from src.formatters.unified_formatter import UnifiedMessageFormatter
 
 
 class MarkdownFormatter(UnifiedMessageFormatter):
