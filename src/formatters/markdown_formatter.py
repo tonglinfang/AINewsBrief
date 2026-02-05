@@ -43,7 +43,7 @@ class MarkdownFormatter:
 
 {% for analysis in articles %}
 {% set deep = deep_analyses_map.get(analysis.article.url) %}
-*{{ ns.num }}\\. {{ escape(analysis.title_cn) }}* {{ importance_stars(analysis.importance_score) }}
+*{{ ns.num }}\. {{ escape(analysis.title_cn) }}* {{ importance_stars(analysis.importance_score) }}
 _來源: {{ escape(analysis.article.source) }}_
 
 💭 {{ escape(analysis.summary) }}
