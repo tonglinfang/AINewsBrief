@@ -45,6 +45,7 @@ async def run_daily_brief() -> BriefState:
         "raw_articles": [],
         "filtered_articles": [],
         "analyzed_articles": [],
+        "deep_analyses": [],
         "report": None,
         "report_path": None,
         "telegram_message_id": None,

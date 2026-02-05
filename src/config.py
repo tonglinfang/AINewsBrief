@@ -103,6 +103,14 @@ class Settings(BaseSettings):
         default=5, description="Max posts per X account"
     )
 
+    # Deep Analysis Configuration
+    enable_deep_analysis: bool = Field(
+        default=True, description="Enable deep analysis for high-value articles"
+    )
+    deep_analysis_threshold: int = Field(
+        default=8, ge=5, le=10, description="Importance score threshold for deep analysis"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
