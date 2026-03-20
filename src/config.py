@@ -1,6 +1,6 @@
 """Configuration management using Pydantic Settings."""
 
-from typing import Literal
+from typing import Literal, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -109,6 +109,20 @@ class Settings(BaseSettings):
     )
     deep_analysis_threshold: int = Field(
         default=8, ge=5, le=10, description="Importance score threshold for deep analysis"
+    )
+    # Max concurrent deep-analysis LLM calls; limits rate-limit pressure
+    deep_analyze_concurrency: int = Field(
+        default=3, ge=1, le=10, description="Max concurrent deep analysis LLM requests"
+    )
+
+    # LLM Fallback Configuration
+    # When the primary provider fails (non-rate-limit), the agent retries on this provider.
+    llm_fallback_provider: Optional[LLMProvider] = Field(
+        default=None, description="Fallback LLM provider when primary fails (optional)"
+    )
+    # Leave empty to reuse llm_model; set explicitly when the fallback uses a different model name.
+    llm_fallback_model: str = Field(
+        default="", description="Fallback model name (falls back to llm_model when empty)"
     )
 
     model_config = SettingsConfigDict(
