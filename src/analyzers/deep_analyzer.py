@@ -1,5 +1,6 @@
-"""Deep analyzer for high-value articles."""
+"""Deep analyzer for high-value articles with controlled concurrency and failover."""
 
+import asyncio
 import json
 import re
 from typing import List, Optional
@@ -11,9 +12,9 @@ from src.models.deep_analysis import (
     DeepAnalysis,
     TechnicalContext,
     ImpactAnalysis,
-    PracticalGuidance
+    PracticalGuidance,
 )
-from src.analyzers.llm_analyzer import create_llm
+from src.analyzers.llm_analyzer import _build_llm_chain, is_rate_limit_error
 from src.config import settings
 from src.utils.logger import get_logger
 
@@ -21,9 +22,16 @@ logger = get_logger("deep_analyzer")
 
 
 class DeepAnalyzer:
-    """Deep analyzer for high-value articles with multi-dimensional analysis."""
+    """Deep analyzer for high-value articles.
 
-    # Deep analysis system prompt
+    Improvements over the original:
+    - Reuses the shared LLM chain (primary + optional fallback) from llm_analyzer,
+      so no duplicate provider connections are opened.
+    - Runs concurrent analyses bounded by settings.deep_analyze_concurrency
+      (default 3) via asyncio.Semaphore, cutting wall-clock time by ~3x while
+      still avoiding rate-limit bursts.
+    """
+
     SYSTEM_PROMPT = """你是一位資深 AI 技術專家和產業分析師，擅長深度技術解析和趨勢洞察。
 
 你的任務是對重要的 AI 新聞進行深度分析，提供多維度的專業見解。
@@ -82,111 +90,140 @@ class DeepAnalyzer:
 
 請提供深度分析結果（JSON 格式）："""
 
-    def __init__(self):
-        """Initialize deep analyzer."""
-        self.llm = create_llm()
-        logger.info("deep_analyzer_initialized")
+    def __init__(self) -> None:
+        # Reuse the same LLM chain as LLMAnalyzer to avoid duplicate connections.
+        self._llms = _build_llm_chain()
+
+        # Semaphore caps concurrent LLM calls to avoid rate-limit bursts.
+        # Value is configurable via DEEP_ANALYZE_CONCURRENCY (default 3).
+        self._semaphore = asyncio.Semaphore(settings.deep_analyze_concurrency)
+
+        logger.info(
+            "deep_analyzer_initialized",
+            concurrency=settings.deep_analyze_concurrency,
+            has_fallback=len(self._llms) > 1,
+        )
+
+    # ------------------------------------------------------------------
+    # Internal retry + failover helpers
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def _is_rate_limit_error(exc: Exception) -> bool:
-        """Check if exception is a rate limit error."""
-        message = str(exc).lower()
-        return "429" in message or "too many requests" in message or "rate limit" in message
+    def _is_rate_limit(exc: Exception) -> bool:
+        return is_rate_limit_error(exc)
 
     @retry(
-        retry=retry_if_exception(_is_rate_limit_error),
+        retry=retry_if_exception(_is_rate_limit),
         stop=stop_after_attempt(4),
         wait=wait_exponential_jitter(initial=1, max=10),
         reraise=True,
     )
-    async def _ainvoke_with_retry(self, messages: List[object]):
-        """Invoke LLM with retry logic."""
-        return await self.llm.ainvoke(messages)
+    async def _call_llm(self, llm, messages: list) -> object:
+        """Single LLM call with rate-limit retry."""
+        return await llm.ainvoke(messages)
+
+    async def _invoke_with_failover(self, messages: list) -> object:
+        """Attempt each LLM in the chain, falling through on non-rate-limit errors."""
+        last_exc: Optional[Exception] = None
+        for idx, llm in enumerate(self._llms):
+            try:
+                return await self._call_llm(llm, messages)
+            except Exception as exc:
+                last_exc = exc
+                if idx < len(self._llms) - 1:
+                    logger.warning(
+                        "deep_llm_provider_failed_switching_to_fallback",
+                        error=str(exc),
+                    )
+                else:
+                    logger.error("deep_all_llm_providers_failed", error=str(exc))
+        raise last_exc  # type: ignore[misc]
+
+    # ------------------------------------------------------------------
+    # Selection logic
+    # ------------------------------------------------------------------
 
     def should_deep_analyze(self, analysis: AnalysisResult) -> bool:
-        """Determine if article needs deep analysis.
+        """Return True when an article warrants deep analysis.
 
         Criteria:
-        1. Importance score >= deep_analysis_threshold (default 8)
-        2. Or Breaking News/Research with score >= 7
-
-        Args:
-            analysis: Analysis result
-
-        Returns:
-            True if deep analysis is needed
+          - importance_score >= deep_analysis_threshold (default 8), or
+          - Breaking News / Research categories with score >= 7.
         """
-        threshold = getattr(settings, 'deep_analysis_threshold', 8)
-
+        threshold = settings.deep_analysis_threshold
         if analysis.importance_score >= threshold:
             return True
-        if analysis.category in ["Breaking News", "Research"] and analysis.importance_score >= 7:
+        if analysis.category in ("Breaking News", "Research") and analysis.importance_score >= 7:
             return True
         return False
 
-    async def analyze_batch(
-        self,
-        analyzed_articles: List[AnalysisResult]
-    ) -> List[DeepAnalysis]:
-        """Perform deep analysis on multiple articles.
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    async def analyze_batch(self, analyzed_articles: List[AnalysisResult]) -> List[DeepAnalysis]:
+        """Perform deep analysis on qualifying articles concurrently.
+
+        Uses asyncio.Semaphore to cap parallelism at settings.deep_analyze_concurrency
+        (default 3), reducing wall-clock time vs. the previous sequential approach
+        while staying within rate-limit budgets.
 
         Args:
-            analyzed_articles: List of analyzed articles
+            analyzed_articles: Results from the shallow analysis stage.
 
         Returns:
-            List of deep analysis results
+            Deep analysis results for articles that met the importance threshold.
         """
-        # Filter articles that need deep analysis
-        articles_to_analyze = [
-            a for a in analyzed_articles
-            if self.should_deep_analyze(a)
-        ]
+        candidates = [a for a in analyzed_articles if self.should_deep_analyze(a)]
 
-        if not articles_to_analyze:
+        if not candidates:
             logger.info("no_articles_for_deep_analysis")
             return []
 
         logger.info(
-            "starting_deep_analysis",
+            "deep_analyze_batch_start",
             total=len(analyzed_articles),
-            selected=len(articles_to_analyze)
+            selected=len(candidates),
+            concurrency=settings.deep_analyze_concurrency,
         )
 
-        # Analyze one by one (deep analysis is slower, avoid concurrent overload)
-        results = []
-        for analysis in articles_to_analyze:
-            try:
-                deep_result = await self.analyze(analysis)
-                results.append(deep_result)
-                logger.info(
-                    "deep_analysis_completed",
-                    title=analysis.title_cn[:50]
-                )
-            except Exception as e:
-                logger.warning(
-                    "deep_analysis_failed",
-                    title=analysis.title_cn[:50],
-                    error=str(e)
-                )
+        async def _bounded(analysis: AnalysisResult) -> Optional[DeepAnalysis]:
+            """Wrap analyze() with the semaphore so at most N tasks run at once."""
+            async with self._semaphore:
+                try:
+                    result = await self.analyze(analysis)
+                    logger.info("deep_analysis_done", title=analysis.title_cn[:50])
+                    return result
+                except Exception as exc:
+                    logger.warning(
+                        "deep_analysis_failed",
+                        title=analysis.title_cn[:50],
+                        error=str(exc),
+                    )
+                    return None
+
+        raw_results = await asyncio.gather(*[_bounded(a) for a in candidates])
+        results = [r for r in raw_results if r is not None]
 
         logger.info(
-            "deep_analysis_batch_completed",
+            "deep_analyze_batch_done",
             successful=len(results),
-            failed=len(articles_to_analyze) - len(results)
+            failed=len(candidates) - len(results),
         )
-
         return results
 
     async def analyze(self, analysis: AnalysisResult) -> DeepAnalysis:
-        """Perform deep analysis on a single article.
+        """Deep-analyze a single article.
+
+        Sends up to 5000 characters of content (vs. 2000 for shallow analysis)
+        to capture more technical detail.
 
         Args:
-            analysis: Basic analysis result
+            analysis: Shallow analysis result containing the original article.
 
         Returns:
-            Deep analysis result
+            DeepAnalysis with multi-dimensional insights.
         """
-        # Prepare prompt with more content (5000 chars vs 2000)
         content_preview = analysis.article.content[:5000]
         user_prompt = self.ANALYSIS_PROMPT.format(
             title_cn=analysis.title_cn,
@@ -197,81 +234,79 @@ class DeepAnalyzer:
             ai_relevance_score=analysis.ai_relevance_score,
             summary=analysis.summary,
             insight=analysis.insight,
-            content=content_preview
+            content=content_preview,
         )
 
-        # Call LLM
         messages = [
             SystemMessage(content=self.SYSTEM_PROMPT),
-            HumanMessage(content=user_prompt)
+            HumanMessage(content=user_prompt),
         ]
 
-        response = await self._ainvoke_with_retry(messages)
-
-        # Parse response
+        response = await self._invoke_with_failover(messages)
         deep_data = self._parse_response(response.content)
 
-        # Build result
         return DeepAnalysis(
             article_url=analysis.article.url,
             technical_context=TechnicalContext(**deep_data["technical_context"]),
             key_insights=deep_data["key_insights"],
             impact=ImpactAnalysis(**deep_data["impact"]),
-            guidance=PracticalGuidance(**deep_data["guidance"]) if deep_data.get("guidance") else None,
+            guidance=(
+                PracticalGuidance(**deep_data["guidance"])
+                if deep_data.get("guidance")
+                else None
+            ),
             controversies=deep_data.get("controversies", []),
             open_questions=deep_data.get("open_questions", []),
-            related_resources=deep_data.get("related_resources", [])
+            related_resources=deep_data.get("related_resources", []),
         )
 
+    # ------------------------------------------------------------------
+    # Response parsing
+    # ------------------------------------------------------------------
+
     def _parse_response(self, response_text: str) -> dict:
-        """Parse LLM response to extract deep analysis data.
-
-        Args:
-            response_text: LLM response text
-
-        Returns:
-            Dict with deep analysis fields
-        """
+        """Extract and validate the deep-analysis JSON from the LLM response."""
         try:
-            # Extract JSON from response
-            patterns = [
-                r'```json\s*([\s\S]*?)\s*```',
-                r'```\s*([\s\S]*?)\s*```',
-                r'(\{[\s\S]*\})'
-            ]
-
-            json_str = None
-            for pattern in patterns:
-                match = re.search(pattern, response_text)
-                if match:
-                    json_str = match.group(1)
-                    break
-
-            if not json_str:
-                json_str = response_text
-
+            json_str = self._extract_json(response_text)
             data = json.loads(json_str)
-
-            # Validate required fields
-            required = ["technical_context", "key_insights", "impact"]
-            for field in required:
-                if field not in data:
-                    raise ValueError(f"Missing required field: {field}")
-
-            # Validate nested required fields
-            if "background" not in data["technical_context"]:
-                raise ValueError("Missing technical_context.background")
-            if "immediate_impact" not in data["impact"] or "long_term_impact" not in data["impact"]:
-                raise ValueError("Missing impact.immediate_impact or impact.long_term_impact")
-            if "impact_level" not in data["impact"]:
-                data["impact"]["impact_level"] = 3  # Default to 3
-
-            return data
-
-        except Exception as e:
+            return self._validate_data(data)
+        except Exception as exc:
             logger.error(
-                "deep_analysis_response_parse_error",
-                error=str(e),
-                response_preview=response_text[:500]
+                "deep_analysis_parse_error",
+                error=str(exc),
+                response_preview=response_text[:500],
             )
             raise
+
+    @staticmethod
+    def _extract_json(text: str) -> str:
+        """Pull the first JSON object from a (possibly markdown-wrapped) string."""
+        for pattern in (
+            r'```json\s*([\s\S]*?)\s*```',
+            r'```\s*([\s\S]*?)\s*```',
+            r'(\{[\s\S]*\})',
+        ):
+            match = re.search(pattern, text)
+            if match:
+                return match.group(1)
+        return text
+
+    @staticmethod
+    def _validate_data(data: dict) -> dict:
+        """Ensure required top-level and nested fields are present."""
+        required_top = ("technical_context", "key_insights", "impact")
+        for field in required_top:
+            if field not in data:
+                raise ValueError(f"Missing required field: {field}")
+
+        if "background" not in data["technical_context"]:
+            raise ValueError("Missing technical_context.background")
+
+        impact = data["impact"]
+        if "immediate_impact" not in impact or "long_term_impact" not in impact:
+            raise ValueError("Missing impact.immediate_impact or impact.long_term_impact")
+
+        # Default impact_level when the LLM omits it.
+        impact.setdefault("impact_level", 3)
+
+        return data
