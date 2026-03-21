@@ -14,6 +14,10 @@ class DailyReport(BaseModel):
         ..., description="Articles grouped by category"
     )
     markdown_content: str = Field(..., description="Formatted markdown report")
+    individual_messages: List[str] = Field(
+        default_factory=list,
+        description="Individual channel post messages, one per article"
+    )
     total_articles: int = Field(..., description="Total number of articles")
     average_importance: float = Field(..., description="Average importance score")
 
