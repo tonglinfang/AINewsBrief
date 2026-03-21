@@ -1,7 +1,7 @@
 """Telegram bot for sending daily reports."""
 
 import asyncio
-from typing import Optional
+from typing import List, Optional
 from telegram import Bot
 from src.models.report import DailyReport
 from src.config import settings
@@ -11,10 +11,13 @@ logger = get_logger("telegram_sender")
 
 
 class TelegramSender:
-    """Sends daily reports to Telegram."""
+    """Sends daily reports to Telegram as individual channel posts."""
 
     # Telegram message size limit
     MAX_MESSAGE_LENGTH = 4096
+
+    # Delay between posts to avoid Telegram rate limits (seconds)
+    POST_DELAY = 1.0
 
     def __init__(self):
         """Initialize Telegram sender."""
@@ -22,29 +25,23 @@ class TelegramSender:
         self.chat_id = settings.telegram_chat_id
 
     async def send_report(self, report: DailyReport) -> Optional[str]:
-        """Send daily report to Telegram.
+        """Send daily report to Telegram as individual channel posts.
+
+        Each article is posted as a separate message for channel operations.
+        Sends a header first, then one post per article.
 
         Args:
             report: Daily report to send
 
         Returns:
-            Message ID if successful, None otherwise
+            Last message ID if successful, None otherwise
         """
         try:
-            content = report.markdown_content
-
-            # Check if message is too long
-            if len(content) <= self.MAX_MESSAGE_LENGTH:
-                message = await self.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=content,
-                    disable_web_page_preview=True,
-                    parse_mode='Markdown',
-                )
-                return str(message.message_id)
+            if report.individual_messages:
+                return await self._send_individual_posts(report.individual_messages)
             else:
-                # Split into multiple messages
-                return await self._send_long_message(content)
+                # Fallback to legacy single-message mode
+                return await self._send_single_report(report.markdown_content)
 
         except Exception as e:
             logger.error(
@@ -55,64 +52,103 @@ class TelegramSender:
             )
             return None
 
-    async def _send_long_message(self, content: str) -> Optional[str]:
-        """Send long message by splitting into chunks.
+    async def _send_individual_posts(self, messages: List[str]) -> Optional[str]:
+        """Send each message as a separate Telegram post.
+
+        Args:
+            messages: List of formatted message strings
+
+        Returns:
+            Last message ID if successful, None otherwise
+        """
+        last_message_id = None
+
+        for i, message in enumerate(messages):
+            try:
+                # Truncate if a single post somehow exceeds the limit
+                if len(message) > self.MAX_MESSAGE_LENGTH:
+                    message = message[: self.MAX_MESSAGE_LENGTH - 3] + "..."
+
+                sent = await self.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=message,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True,
+                )
+                last_message_id = str(sent.message_id)
+
+                # Delay between posts (skip after last message)
+                if i < len(messages) - 1:
+                    await asyncio.sleep(self.POST_DELAY)
+
+            except Exception as e:
+                logger.error(
+                    "telegram_post_error",
+                    post_index=i,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                # Continue sending remaining posts even if one fails
+
+        return last_message_id
+
+    async def _send_single_report(self, content: str) -> Optional[str]:
+        """Legacy: send entire report as one (or split) message.
+
+        Args:
+            content: Full markdown content
+
+        Returns:
+            Message ID if successful, None otherwise
+        """
+        if len(content) <= self.MAX_MESSAGE_LENGTH:
+            message = await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=content,
+                disable_web_page_preview=True,
+                parse_mode="Markdown",
+            )
+            return str(message.message_id)
+        else:
+            return await self._split_and_send(content)
+
+    async def _split_and_send(self, content: str) -> Optional[str]:
+        """Split oversized content and send as multiple messages.
 
         Args:
             content: Message content to split
 
         Returns:
-            Last message ID if successful
+            Last message ID if successful, None otherwise
         """
-        try:
-            messages_to_send = []
-            current_chunk = ""
-            
-            # Split by lines to preserve formatting
-            lines = content.split('\n')
-            
-            for line in lines:
-                # Check if adding this line would exceed limit
-                test_chunk = current_chunk + '\n' + line if current_chunk else line
-                
-                if len(test_chunk) > self.MAX_MESSAGE_LENGTH - 100:
-                    # Current chunk is full, save it and start new one
-                    if current_chunk:
-                        messages_to_send.append(current_chunk)
-                    current_chunk = line
-                else:
-                    current_chunk = test_chunk
-            
-            # Add remaining content
-            if current_chunk:
-                messages_to_send.append(current_chunk)
-            
-            # Send all chunks
-            last_message_id = None
-            
-            for i, chunk in enumerate(messages_to_send, 1):
-                message = await self.bot.send_message(
-                    chat_id=self.chat_id,
-                    text=chunk,
-                    disable_web_page_preview=True,
-                    parse_mode='Markdown',
-                )
-                last_message_id = str(message.message_id)
-                
-                # Small delay between messages to avoid rate limits
-                if i < len(messages_to_send):
-                    await asyncio.sleep(0.5)
-            
-            return last_message_id
+        chunks = []
+        current_chunk = ""
 
-        except Exception as e:
-            logger.error(
-                "telegram_split_message_error",
-                error=str(e),
-                error_type=type(e).__name__,
-                exc_info=True,
+        for line in content.split("\n"):
+            test_chunk = current_chunk + "\n" + line if current_chunk else line
+            if len(test_chunk) > self.MAX_MESSAGE_LENGTH - 100:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                current_chunk = line
+            else:
+                current_chunk = test_chunk
+
+        if current_chunk:
+            chunks.append(current_chunk)
+
+        last_message_id = None
+        for i, chunk in enumerate(chunks, 1):
+            message = await self.bot.send_message(
+                chat_id=self.chat_id,
+                text=chunk,
+                disable_web_page_preview=True,
+                parse_mode="Markdown",
             )
-            return None
+            last_message_id = str(message.message_id)
+            if i < len(chunks):
+                await asyncio.sleep(0.5)
+
+        return last_message_id
 
     async def send_error(self, error_message: str) -> None:
         """Send error notification to Telegram.
