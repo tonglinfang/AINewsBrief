@@ -4,7 +4,7 @@ import asyncio
 import sys
 from datetime import datetime
 from src.graph.state import BriefState
-from src.graph.workflow import create_brief_workflow
+from src.graph.workflow import run_pipeline
 from src.config import settings
 from src.utils.logger import init_logger, get_logger
 
@@ -35,9 +35,6 @@ async def run_daily_brief() -> BriefState:
         llm_provider=settings.llm_provider,
     )
 
-    # Create workflow
-    workflow = create_brief_workflow()
-
     # Initialize state
     initial_state: BriefState = {
         "date": datetime.now(),
@@ -52,9 +49,9 @@ async def run_daily_brief() -> BriefState:
         "errors": [],
     }
 
-    # Run workflow
+    # Run pipeline
     try:
-        final_state = await workflow.ainvoke(initial_state)
+        final_state = await run_pipeline(initial_state)
 
         logger.info(
             "workflow_complete",
